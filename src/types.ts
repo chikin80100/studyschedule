@@ -26,6 +26,11 @@ export type Task = {
   plannedAmount: number;
   doneAmount: number;
   isCompleted: boolean;
+  /**
+   * 「この日はどうだったか」を確認した日 ('YYYY-MM-DD')。未確認なら null。
+   * 終わらなかった日を「確認済み」にして、毎日の確認リストから外すために使う。
+   */
+  checkedAt: string | null;
 };
 
 /** 1日あたりの量を切り上げる単位。'auto' なら平均量から自動で選ぶ。 */

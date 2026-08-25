@@ -2,12 +2,12 @@ import { Link } from 'react-router-dom';
 import type { AppDataApi } from '../hooks/usePlans';
 import { usePlanProgress } from '../hooks/usePlans';
 import { computePace } from '../lib/progress';
-import { today as todayString } from '../lib/date';
+import { useToday } from '../hooks/useToday';
 import PlanCard from '../components/PlanCard';
 
 export default function PlansList({ api }: { api: AppDataApi }) {
   const progresses = usePlanProgress(api.data);
-  const today = todayString();
+  const today = useToday();
 
   return (
     <div className="space-y-4">

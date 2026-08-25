@@ -153,9 +153,29 @@ describe('buildSchedule: 合計量の一致(不変条件)', () => {
   });
 
   it('極端に小さい総量でも計画量が消えない', () => {
-    const schedule = buildSchedule(input({ totalAmount: 0.0004 }));
-    expect(sumPlanned(schedule.entries)).toBeCloseTo(0.0004, 10);
-    expect(schedule.studyDayCount).toBeGreaterThan(0);
+    for (const totalAmount of [0.0004, 0.000001, 0.5, 1e-6]) {
+      const schedule = buildSchedule(input({ totalAmount }));
+      expect(schedule.plannedTotal).toBe(totalAmount);
+      expect(schedule.studyDayCount).toBeGreaterThan(0);
+    }
+  });
+
+  it('最小単位に届かない総量は受け付けない', () => {
+    expect(validateScheduleInput(input({ totalAmount: 1e-7 }))).toMatch(/総量/);
+  });
+
+  it('総当たりで plannedTotal が総量と一致する', () => {
+    for (const roundingStep of ['auto', 0.1, 0.5, 1, 5, 10] as const) {
+      for (const totalAmount of [0.3, 1, 7.5, 33.3, 99.99, 123.456, 1000]) {
+        for (const bufferRatio of [0, 0.15, 0.5]) {
+          const schedule = buildSchedule(
+            input({ totalAmount, bufferRatio, roundingStep }),
+          );
+          expect(schedule.plannedTotal).toBe(totalAmount);
+          expect(sumPlanned(schedule.entries)).toBe(totalAmount);
+        }
+      }
+    }
   });
 
   it('予備日と重みを併用しても合計が一致する', () => {
@@ -385,6 +405,7 @@ describe('generateTasks', () => {
         plannedAmount: 99,
         doneAmount: 99,
         isCompleted: true,
+        checkedAt: null,
       },
     ];
     const tasks = generateTasks(plan, foreign);
@@ -403,6 +424,64 @@ describe('generateTasks', () => {
     expect(target?.plannedAmount).toBe(0);
     expect(target?.isCompleted).toBe(false);
     expect(target?.doneAmount).toBe(10); // 実際にやった記録は残す
+  });
+
+  it('学習しない日になっても実績があれば記録として残る', () => {
+    const done = generateTasks(plan).map((task) => ({
+      ...task,
+      doneAmount: task.plannedAmount,
+      isCompleted: true,
+    }));
+    // 土曜(2026-09-05)を休養日にする
+    const restSaturday = {
+      ...plan,
+      weekdaySettings: createDefaultWeekdaySettings().map((s) =>
+        s.dayOfWeek === 6 ? { ...s, isRestDay: true } : s,
+      ),
+    };
+    const regenerated = generateTasks(restSaturday, done);
+    const saturday = regenerated.find((task) => task.date === '2026-09-05');
+    expect(saturday?.kind).toBe('buffer');
+    expect(saturday?.doneAmount).toBe(10);
+    // 実績の合計が減っていない
+    expect(sumBy(regenerated, (task) => task.doneAmount)).toBe(
+      sumBy(done, (task) => task.doneAmount),
+    );
+  });
+
+  it('比率を 0 にしても実績は消えない', () => {
+    const done = generateTasks(plan).map((task) => ({
+      ...task,
+      doneAmount: task.plannedAmount,
+      isCompleted: true,
+    }));
+    const zeroSaturday = {
+      ...plan,
+      weekdaySettings: createDefaultWeekdaySettings().map((s) =>
+        s.dayOfWeek === 6 ? { ...s, weight: 0 } : s,
+      ),
+    };
+    expect(sumBy(generateTasks(zeroSaturday, done), (task) => task.doneAmount)).toBe(100);
+  });
+
+  it('外したチェックがプラン編集で復活しない', () => {
+    const previous = generateTasks(plan).map((task) =>
+      task.date === '2026-09-02' ? { ...task, doneAmount: 20, isCompleted: false } : task,
+    );
+    const regenerated = generateTasks(plan, previous);
+    expect(regenerated.find((task) => task.date === '2026-09-02')?.isCompleted).toBe(false);
+  });
+
+  it('日付順に並ぶ', () => {
+    const done = generateTasks(plan).map((task) => ({ ...task, doneAmount: 1 }));
+    const restSaturday = {
+      ...plan,
+      weekdaySettings: createDefaultWeekdaySettings().map((s) =>
+        s.dayOfWeek === 6 ? { ...s, isRestDay: true } : s,
+      ),
+    };
+    const dates = generateTasks(restSaturday, done).map((task) => task.date);
+    expect(dates).toEqual([...dates].sort());
   });
 
   it('期間が縮むと範囲外のタスクは消える', () => {

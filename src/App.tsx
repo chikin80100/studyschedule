@@ -1,10 +1,17 @@
-import { HashRouter, NavLink, Route, Routes } from 'react-router-dom';
+import { HashRouter, NavLink, Route, Routes, useParams } from 'react-router-dom';
 import { useAppData } from './hooks/usePlans';
 import Dashboard from './pages/Dashboard';
 import PlansList from './pages/PlansList';
 import PlanForm from './pages/PlanForm';
 import PlanDetail from './pages/PlanDetail';
 import Settings from './pages/Settings';
+import ErrorBoundary from './components/ErrorBoundary';
+
+/** 編集画面はプランごとに作り直す(別プランの編集に切り替えたとき値が残らないように)。 */
+function PlanFormRoute({ api }: { api: ReturnType<typeof useAppData> }) {
+  const { planId } = useParams();
+  return <PlanForm api={api} key={planId} />;
+}
 
 const NAV_ITEMS = [
   { to: '/', label: '今日', icon: '📅', end: true },
@@ -47,20 +54,29 @@ export default function App() {
           </div>
         </header>
 
+        {api.saveFailed && (
+          <p className="mx-4 mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-800">
+            データを保存できませんでした。ブラウザの保存容量がいっぱいか、プライベートモードの可能性があります。
+            設定画面から不要なプランを削除するか、JSONで書き出して残してください。
+          </p>
+        )}
+
         <main className="flex-1 px-4 py-5 pb-16">
-          {api.isLoaded ? (
-            <Routes>
-              <Route path="/" element={<Dashboard api={api} />} />
-              <Route path="/plans" element={<PlansList api={api} />} />
-              <Route path="/plans/new" element={<PlanForm api={api} />} />
-              <Route path="/plans/:planId" element={<PlanDetail api={api} />} />
-              <Route path="/plans/:planId/edit" element={<PlanForm api={api} />} />
-              <Route path="/settings" element={<Settings api={api} />} />
-              <Route path="*" element={<Dashboard api={api} />} />
-            </Routes>
-          ) : (
-            <p className="py-10 text-center text-sm text-slate-400">読み込み中…</p>
-          )}
+          <ErrorBoundary>
+            {api.isLoaded ? (
+              <Routes>
+                <Route path="/" element={<Dashboard api={api} />} />
+                <Route path="/plans" element={<PlansList api={api} />} />
+                <Route path="/plans/new" element={<PlanForm api={api} key="new" />} />
+                <Route path="/plans/:planId" element={<PlanDetail api={api} />} />
+                <Route path="/plans/:planId/edit" element={<PlanFormRoute api={api} />} />
+                <Route path="/settings" element={<Settings api={api} />} />
+                <Route path="*" element={<Dashboard api={api} />} />
+              </Routes>
+            ) : (
+              <p className="py-10 text-center text-sm text-slate-400">読み込み中…</p>
+            )}
+          </ErrorBoundary>
         </main>
       </div>
     </HashRouter>

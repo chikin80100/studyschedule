@@ -79,6 +79,7 @@ describe('parseAppData', () => {
       plannedAmount: 10,
       doneAmount: 0,
       isCompleted: false,
+      checkedAt: null,
     };
     expect(parseAppData(dataWith([plan], [orphan])).data.tasks).toHaveLength(0);
   });
@@ -105,6 +106,7 @@ describe('parseAppData', () => {
       plannedAmount: 10,
       doneAmount: 3,
       isCompleted: true,
+      checkedAt: null,
     };
     const restored = parseAppData(dataWith([plan], [task])).data.tasks[0];
     expect(restored.plannedAmount).toBe(0);
@@ -117,13 +119,13 @@ describe('importFromJson', () => {
   const data: AppData = { version: 1, plans: [plan], tasks: generateTasks(plan) };
 
   it('書き出したデータを読み戻せる', () => {
-    const restored = importFromJson(exportToJson(data));
+    const restored = importFromJson(exportToJson(data)).data;
     expect(restored.plans).toHaveLength(1);
     expect(restored.tasks).toHaveLength(data.tasks.length);
   });
 
   it('プランが空のデータも読める', () => {
-    expect(importFromJson(JSON.stringify(emptyData())).plans).toHaveLength(0);
+    expect(importFromJson(JSON.stringify(emptyData())).data.plans).toHaveLength(0);
   });
 
   it('このアプリのデータでない JSON を弾く', () => {

@@ -2,8 +2,15 @@ import type { Plan, Task } from '../types';
 import { addDays, diffDays, today as todayString } from './date';
 import { roundAmount, sumBy } from './amount';
 
-/** その日の取り組み状況。予備日・休養日しかない日は 'none'(記録の対象外)。 */
-export type DayStatus = 'achieved' | 'partial' | 'missed' | 'none';
+/**
+ * その日の取り組み状況。
+ * - achieved: 計画量のある日をすべて終えた
+ * - partial:  一部だけ進んだ
+ * - missed:   計画量があったのに手つかず
+ * - none:     休養日・予備日しかない日(記録の対象外。連続を途切れさせない)
+ * - idle:     プランが1つも動いていない日(連続はここで途切れる)
+ */
+export type DayStatus = 'achieved' | 'partial' | 'missed' | 'none' | 'idle';
 
 export type DayRecord = {
   date: string;
@@ -11,6 +18,12 @@ export type DayRecord = {
   plannedAmount: number;
   doneAmount: number;
 };
+
+/** その日を「終えた」とみなすか。計画量が 0 の日は対象外。 */
+function isTaskDone(task: Task): boolean {
+  if (task.kind !== 'study' || task.plannedAmount <= 0) return false;
+  return task.isCompleted || task.doneAmount >= task.plannedAmount;
+}
 
 /** 日付ごとに全プランのタスクをまとめる。 */
 export function collectDayRecords(tasks: Task[]): Map<string, DayRecord> {
@@ -27,19 +40,20 @@ export function collectDayRecords(tasks: Task[]): Map<string, DayRecord> {
     records.set(task.date, record);
   }
 
+  // 計画量のある日だけを判定対象にする。予備日の自主学習は連続記録には数えない
+  //(数えてしまうと「予備日に1だけ入れる」で記録が伸びてしまう)。
   const completedByDate = new Map<string, boolean>();
   for (const task of tasks) {
-    if (task.kind !== 'study') continue;
+    if (task.kind !== 'study' || task.plannedAmount <= 0) continue;
     const previous = completedByDate.get(task.date);
-    const done = task.isCompleted || task.doneAmount >= task.plannedAmount;
+    const done = isTaskDone(task);
     completedByDate.set(task.date, previous === undefined ? done : previous && done);
   }
 
   for (const record of records.values()) {
     const allCompleted = completedByDate.get(record.date);
     if (allCompleted === undefined) {
-      // 計画量のある日が無い = 休養日・予備日のみ。連続記録の判定対象にしない。
-      record.status = record.doneAmount > 0 ? 'achieved' : 'none';
+      record.status = 'none';
     } else if (allCompleted) {
       record.status = 'achieved';
     } else {
@@ -47,6 +61,11 @@ export function collectDayRecords(tasks: Task[]): Map<string, DayRecord> {
     }
   }
   return records;
+}
+
+/** その日にプランが1つでも動いていたか。 */
+function isCoveredByPlan(plans: Plan[], date: string): boolean {
+  return plans.some((plan) => plan.startDate <= date && date <= plan.endDate);
 }
 
 export type StreakSummary = {
@@ -64,28 +83,53 @@ export type StreakSummary = {
  * 連続達成記録を集計する。
  * - 計画量のある日をすべて完了させた日が「達成」。
  * - 休養日・予備日しかない日は連続を途切れさせず、日数にも数えない。
+ * - プランが1つも動いていない日(何も予定が無かった期間)では連続が途切れる。
  * - 今日はまだ取り組み中の可能性があるため、未達成でも連続を途切れさせない。
  */
-export function computeStreak(tasks: Task[], today = todayString(), recentDays = 21): StreakSummary {
+export function computeStreak(
+  plans: Plan[],
+  tasks: Task[],
+  today = todayString(),
+  recentDays = 21,
+): StreakSummary {
   const records = collectDayRecords(tasks);
   const dates = [...records.keys()].filter((date) => date <= today).sort();
+  const earliest = dates[0];
+
+  const statusOf = (date: string): DayStatus => {
+    const status = records.get(date)?.status;
+    if (status) return status;
+    return isCoveredByPlan(plans, date) ? 'none' : 'idle';
+  };
 
   let current = 0;
-  for (let cursor = today; dates.length > 0 && cursor >= dates[0]; cursor = addDays(cursor, -1)) {
-    const status = records.get(cursor)?.status ?? 'none';
+  for (let cursor = today; earliest !== undefined && cursor >= earliest; cursor = addDays(cursor, -1)) {
+    const status = statusOf(cursor);
     if (status === 'achieved') {
       current += 1;
       continue;
     }
     if (status === 'none') continue; // 休養日・予備日は素通り
     if (cursor === today) continue; // 今日はこれから達成できる
-    break;
+    break; // missed / partial / idle で途切れる
   }
 
   let longest = 0;
   let run = 0;
+  let previousDate: string | null = null;
   for (const date of dates) {
-    const status = records.get(date)?.status ?? 'none';
+    // 記録の無い日が挟まっていれば、その間にプランが動いていたかを見る。
+    if (previousDate !== null) {
+      for (let gap = addDays(previousDate, 1); gap < date; gap = addDays(gap, 1)) {
+        if (statusOf(gap) === 'idle') {
+          run = 0;
+          break;
+        }
+      }
+    }
+    previousDate = date;
+
+    const status = statusOf(date);
     if (status === 'achieved') {
       run += 1;
       longest = Math.max(longest, run);
@@ -99,7 +143,7 @@ export function computeStreak(tasks: Task[], today = todayString(), recentDays =
   for (let i = recentDays - 1; i >= 0; i -= 1) {
     const date = addDays(today, -i);
     recent.push(
-      records.get(date) ?? { date, status: 'none', plannedAmount: 0, doneAmount: 0 },
+      records.get(date) ?? { date, status: statusOf(date), plannedAmount: 0, doneAmount: 0 },
     );
   }
 
@@ -120,7 +164,7 @@ export type PaceSummary = {
   delta: number;
   /** 残りの量 */
   remainingAmount: number;
-  /** 残っている予備日の数 */
+  /** 明日以降に残っている予備日の数 */
   remainingBufferDays: number;
   /** 期間の残り日数(今日を含まない) */
   remainingDays: number;
@@ -153,13 +197,27 @@ export function computePace(plan: Plan, tasks: Task[], today = todayString()): P
   };
 }
 
-/** 今日より前で、まだ完了確認をしていない計画日。デイリーチェックインの対象。 */
-export function findUncheckedTasks(tasks: Task[], today = todayString()): Task[] {
+/** 毎日の確認でさかのぼる日数。これより古い日は確認リストに出さない。 */
+export const CHECK_IN_LOOKBACK_DAYS = 14;
+
+/**
+ * 今日より前で、まだ「どうだったか」を確認していない計画日。
+ * 何年も前の未完了タスクが延々と並ばないよう、直近の日数分だけを見る。
+ */
+export function findUncheckedTasks(
+  tasks: Task[],
+  today = todayString(),
+  lookbackDays = CHECK_IN_LOOKBACK_DAYS,
+): Task[] {
+  const since = addDays(today, -lookbackDays);
   return tasks
     .filter(
       (task) =>
         task.kind === 'study' &&
+        task.plannedAmount > 0 &&
         task.date < today &&
+        task.date >= since &&
+        task.checkedAt === null &&
         !task.isCompleted &&
         task.doneAmount < task.plannedAmount,
     )

@@ -13,24 +13,35 @@ export default function Settings({ api }: { api: AppDataApi }) {
     link.href = url;
     link.download = `studyschedule-${new Date().toISOString().slice(0, 10)}.json`;
     link.click();
-    URL.revokeObjectURL(url);
+    // ダウンロードが始まる前に失効させないよう、少し待ってから解放する。
+    window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
     setMessage({ tone: 'ok', text: 'データを書き出しました。' });
   };
 
   const handleImport = async (file: File) => {
     try {
-      const data = importFromJson(await file.text());
+      const result = importFromJson(await file.text());
+      const dropped =
+        result.droppedPlanCount > 0
+          ? `(${result.droppedPlanCount}件は形式が合わず読み込めませんでした)`
+          : '';
       if (
         !window.confirm(
-          `プラン ${data.plans.length}件を読み込みます。今のデータは置き換えられます。よろしいですか?`,
+          `プラン ${result.data.plans.length}件を読み込みます${dropped}。今のデータは置き換えられます。よろしいですか?`,
         )
       ) {
         return;
       }
-      api.replaceAll(data);
-      setMessage({ tone: 'ok', text: `プラン ${data.plans.length}件を読み込みました。` });
-    } catch {
-      setMessage({ tone: 'error', text: 'ファイルを読み込めませんでした。JSON形式か確認してください。' });
+      api.replaceAll(result.data);
+      setMessage({
+        tone: result.droppedPlanCount > 0 ? 'error' : 'ok',
+        text: `プラン ${result.data.plans.length}件を読み込みました。${dropped}`,
+      });
+    } catch (error) {
+      setMessage({
+        tone: 'error',
+        text: error instanceof Error ? error.message : 'ファイルを読み込めませんでした。',
+      });
     } finally {
       if (fileInput.current) fileInput.current.value = '';
     }

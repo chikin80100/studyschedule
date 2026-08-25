@@ -2,9 +2,10 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { AppDataApi } from '../hooks/usePlans';
 import { usePlanProgress } from '../hooks/usePlans';
+import { useToday } from '../hooks/useToday';
 import { computePace, computeStreak, findUncheckedTasks } from '../lib/progress';
 import { rescheduleFrom, shouldSuggestReschedule } from '../lib/reschedule';
-import { formatLong, today as todayString } from '../lib/date';
+import { formatLong } from '../lib/date';
 import { formatAmount } from '../lib/format';
 import { sumBy } from '../lib/amount';
 import TaskItem from '../components/TaskItem';
@@ -12,11 +13,14 @@ import StreakCard from '../components/StreakCard';
 import ProgressBar from '../components/ProgressBar';
 
 export default function Dashboard({ api }: { api: AppDataApi }) {
-  const today = todayString();
+  const today = useToday();
   const progresses = usePlanProgress(api.data);
   const [message, setMessage] = useState<string | null>(null);
 
-  const streak = useMemo(() => computeStreak(api.data.tasks, today), [api.data.tasks, today]);
+  const streak = useMemo(
+    () => computeStreak(api.data.plans, api.data.tasks, today),
+    [api.data.plans, api.data.tasks, today],
+  );
   const uncheckedTasks = useMemo(
     () => findUncheckedTasks(api.data.tasks, today),
     [api.data.tasks, today],
@@ -36,43 +40,48 @@ export default function Dashboard({ api }: { api: AppDataApi }) {
     [api.data.plans, api.data.tasks, today],
   );
 
+  const activePlansToday = api.data.plans.filter(
+    (plan) => plan.startDate <= today && today <= plan.endDate,
+  );
+
   const todayPlanned = sumBy(todayTasks, (task) => task.plannedAmount);
   const todayDone = sumBy(todayTasks, (task) => Math.min(task.doneAmount, task.plannedAmount));
   const todayRatio = todayPlanned > 0 ? todayDone / todayPlanned : 0;
-  const studyTasksToday = todayTasks.filter((task) => task.kind === 'study');
+  const studyTasksToday = todayTasks.filter(
+    (task) => task.kind === 'study' && task.plannedAmount > 0,
+  );
 
-  const applyReschedule = (planIds: string[]) => {
-    let tasks = api.data.tasks;
+  const applyReschedule = () => {
     const summaries: string[] = [];
-    for (const planId of planIds) {
-      const plan = planById.get(planId);
-      if (!plan) continue;
-      const result = rescheduleFrom(plan, tasks, today);
-      tasks = [...tasks.filter((task) => task.planId !== planId), ...result.tasks];
+    for (const plan of behindPlans) {
+      const planTasks = api.data.tasks.filter((task) => task.planId === plan.id);
+      const result = rescheduleFrom(plan, planTasks, today);
+      api.replaceTasks(plan.id, result.tasks);
       summaries.push(
-        `${plan.title}: 残り ${formatAmount(result.remainingAmount, plan.unit)} を ${result.affectedDays}日に配り直し(1日 最大 ${formatAmount(result.maxDailyAmount, plan.unit)})`,
+        result.hasNoRoom
+          ? `${plan.title}: 残り ${formatAmount(result.remainingAmount, plan.unit)} を入れる学習日が残っていません。期間か曜日設定を見直してください。`
+          : `${plan.title}: 残り ${formatAmount(result.remainingAmount, plan.unit)} を ${result.affectedDays}日に配り直しました(1日 最大 ${formatAmount(result.maxDailyAmount, plan.unit)})`,
       );
     }
-    api.replaceAll({ ...api.data, tasks });
-    setMessage(summaries.join(' / ') || '修正対象がありませんでした。');
+    setMessage(summaries.join(' / ') || '修正するプランがありませんでした。');
   };
 
   const markUnchecked = (mode: 'done' | 'missed') => {
     const targets = new Set(uncheckedTasks.map((task) => task.id));
-    api.replaceAll({
-      ...api.data,
-      tasks: api.data.tasks.map((task) =>
-        targets.has(task.id)
-          ? mode === 'done'
-            ? { ...task, doneAmount: Math.max(task.doneAmount, task.plannedAmount), isCompleted: true }
-            : { ...task, isCompleted: false }
-          : task,
-      ),
-    });
+    if (targets.size === 0) return;
+    api.patchTasks(targets, (task) =>
+      mode === 'done'
+        ? {
+            doneAmount: Math.max(task.doneAmount, task.plannedAmount),
+            isCompleted: true,
+            checkedAt: today,
+          }
+        : { isCompleted: false, checkedAt: today },
+    );
     setMessage(
       mode === 'done'
         ? `${targets.size}日分を完了として記録しました。`
-        : `${targets.size}日分を未達成として確認しました。必要なら計画を修正しましょう。`,
+        : `${targets.size}日分を「できなかった」として確認しました。必要なら計画を修正しましょう。`,
     );
   };
 
@@ -88,7 +97,7 @@ export default function Dashboard({ api }: { api: AppDataApi }) {
         </p>
         <Link
           to="/plans/new"
-          className="mt-5 inline-block rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-700"
+          className="mt-5 inline-block rounded-xl bg-indigo-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-indigo-700"
         >
           プランを作る
         </Link>
@@ -109,7 +118,7 @@ export default function Dashboard({ api }: { api: AppDataApi }) {
           <button
             type="button"
             onClick={() => setMessage(null)}
-            className="shrink-0 text-indigo-400 hover:text-indigo-600"
+            className="shrink-0 px-1 text-indigo-400 hover:text-indigo-600"
             aria-label="通知を閉じる"
           >
             ✕
@@ -125,8 +134,8 @@ export default function Dashboard({ api }: { api: AppDataApi }) {
           <p className="mt-1 text-xs text-amber-800">
             過ぎた日で完了になっていないタスクです。実際にできたかどうかを記録しましょう。
           </p>
-          <ul className="mt-3 max-h-48 space-y-1.5 overflow-y-auto">
-            {uncheckedTasks.slice(0, 10).map((task) => {
+          <ul className="mt-3 max-h-64 space-y-1.5 overflow-y-auto">
+            {uncheckedTasks.map((task) => {
               const plan = planById.get(task.planId);
               if (!plan) return null;
               return (
@@ -144,14 +153,14 @@ export default function Dashboard({ api }: { api: AppDataApi }) {
             <button
               type="button"
               onClick={() => markUnchecked('done')}
-              className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-700"
+              className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-emerald-700"
             >
               すべてできた
             </button>
             <button
               type="button"
               onClick={() => markUnchecked('missed')}
-              className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-800 transition hover:bg-amber-100"
+              className="rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-semibold text-amber-800 transition hover:bg-amber-100"
             >
               できなかった(確認済みにする)
             </button>
@@ -175,8 +184,8 @@ export default function Dashboard({ api }: { api: AppDataApi }) {
           </ul>
           <button
             type="button"
-            onClick={() => applyReschedule(behindPlans.map((plan) => plan.id))}
-            className="mt-3 rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-rose-700"
+            onClick={applyReschedule}
+            className="mt-3 rounded-lg bg-rose-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-rose-700"
           >
             残りを今日から配り直す
           </button>
@@ -199,7 +208,9 @@ export default function Dashboard({ api }: { api: AppDataApi }) {
           <p className="mt-4 rounded-xl bg-slate-50 px-3 py-4 text-center text-sm text-slate-500">
             {todayTasks.length > 0
               ? '今日は予備日です。遅れの挽回や先取りに使えます。'
-              : '今日は休養日です。ゆっくり休みましょう。'}
+              : activePlansToday.length > 0
+                ? '今日は休養日です。ゆっくり休みましょう。'
+                : '今日のタスクはありません。'}
           </p>
         ) : (
           <ul className="mt-4 space-y-2">

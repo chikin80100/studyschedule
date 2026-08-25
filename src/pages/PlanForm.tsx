@@ -4,7 +4,9 @@ import type { AppDataApi, PlanDraft } from '../hooks/usePlans';
 import type { RoundingStep, WeekdaySetting } from '../types';
 import { createDefaultWeekdaySettings } from '../types';
 import { buildSchedule, validateScheduleInput } from '../lib/taskGenerator';
-import { addDays, formatShort, today as todayString } from '../lib/date';
+import { addDays, formatShort } from '../lib/date';
+import { useToday } from '../hooks/useToday';
+import { roundAmount } from '../lib/amount';
 import { formatAmount } from '../lib/format';
 import WeekdayWeightEditor from '../components/WeekdayWeightEditor';
 
@@ -36,6 +38,7 @@ type FormState = {
 
 export default function PlanForm({ api }: { api: AppDataApi }) {
   const navigate = useNavigate();
+  const today = useToday();
   const { planId } = useParams();
   const existing = planId ? api.data.plans.find((plan) => plan.id === planId) : undefined;
   const isEdit = Boolean(existing);
@@ -55,8 +58,8 @@ export default function PlanForm({ api }: { api: AppDataApi }) {
       : {
           title: '',
           unit: 'ページ',
-          startDate: todayString(),
-          endDate: addDays(todayString(), 29),
+          startDate: today,
+          endDate: addDays(today, 29),
           totalAmount: '',
           weekdaySettings: createDefaultWeekdaySettings(),
           bufferRatio: 0.15,
@@ -71,7 +74,8 @@ export default function PlanForm({ api }: { api: AppDataApi }) {
     unit: form.unit.trim(),
     startDate: form.startDate,
     endDate: form.endDate,
-    totalAmount: Number(form.totalAmount) || 0,
+    // 小数7桁以上は最小単位に収まらないので、入力の時点で丸める。
+    totalAmount: roundAmount(Number(form.totalAmount) || 0),
     weekdaySettings: form.weekdaySettings,
     bufferRatio: form.bufferRatio,
     roundingStep: form.roundingStep,
@@ -104,7 +108,13 @@ export default function PlanForm({ api }: { api: AppDataApi }) {
     if (!canSubmit) return;
     if (isEdit && existing) {
       const ok = window.confirm(
-        '計画を作り直します。日付が変わらないタスクの実績は引き継がれますが、範囲外になった日の記録は消えます。よろしいですか?',
+        [
+          '計画を作り直します。',
+          '・同じ日付のタスクの実績は引き継がれます。',
+          '・学習しない日(休養日・比率0)になった日も、実績があれば記録として残ります。',
+          '・新しい期間の外になった日の記録は消えます。',
+          'よろしいですか?',
+        ].join('\n'),
       );
       if (!ok) return;
       api.updatePlan(existing.id, draft);

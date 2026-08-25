@@ -4,7 +4,8 @@ import type { AppDataApi } from '../hooks/usePlans';
 import { summarizePlan } from '../hooks/usePlans';
 import { computePace } from '../lib/progress';
 import { rescheduleFrom } from '../lib/reschedule';
-import { formatMonth, formatShort, today as todayString } from '../lib/date';
+import { formatMonth, formatShort } from '../lib/date';
+import { useToday } from '../hooks/useToday';
 import { formatAmount, formatPercent } from '../lib/format';
 import ProgressBar from '../components/ProgressBar';
 import TaskItem from '../components/TaskItem';
@@ -12,7 +13,7 @@ import TaskItem from '../components/TaskItem';
 export default function PlanDetail({ api }: { api: AppDataApi }) {
   const { planId } = useParams();
   const navigate = useNavigate();
-  const today = todayString();
+  const today = useToday();
   const [message, setMessage] = useState<string | null>(null);
 
   const plan = api.data.plans.find((item) => item.id === planId);
@@ -37,20 +38,25 @@ export default function PlanDetail({ api }: { api: AppDataApi }) {
   const groups = new Map<string, typeof progress.tasks>();
   for (const task of progress.tasks) {
     const key = formatMonth(task.date);
-    groups.set(key, [...(groups.get(key) ?? []), task]);
+    const group = groups.get(key);
+    if (group) group.push(task);
+    else groups.set(key, [task]);
   }
 
   const handleReschedule = () => {
-    const result = rescheduleFrom(plan, api.data.tasks, today);
-    api.replaceAll({
-      ...api.data,
-      tasks: [...api.data.tasks.filter((task) => task.planId !== plan.id), ...result.tasks],
-    });
-    setMessage(
-      result.remainingAmount <= 0
-        ? 'すべて完了しているため、残りの日は予備日にしました。'
-        : `残り ${formatAmount(result.remainingAmount, plan.unit)} を ${result.affectedDays}日に配り直しました(1日 最大 ${formatAmount(result.maxDailyAmount, plan.unit)})。`,
-    );
+    const result = rescheduleFrom(plan, progress.tasks, today);
+    api.replaceTasks(plan.id, result.tasks);
+    if (result.remainingAmount <= 0) {
+      setMessage('すべて終わっているので、残りの日は予備日にしました。');
+    } else if (result.hasNoRoom) {
+      setMessage(
+        `残り ${formatAmount(result.remainingAmount, plan.unit)} を入れる学習日が残っていません。期間を延ばすか、曜日設定を見直してください。`,
+      );
+    } else {
+      setMessage(
+        `残り ${formatAmount(result.remainingAmount, plan.unit)} を ${result.affectedDays}日に配り直しました(1日 最大 ${formatAmount(result.maxDailyAmount, plan.unit)})。`,
+      );
+    }
   };
 
   const handleDelete = () => {

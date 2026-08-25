@@ -37,7 +37,9 @@ export const MAX_TOTAL_AMOUNT = 1e9;
 const MIN_DATE = '1900-01-01';
 const MAX_DATE = '2999-12-31';
 /** 小数は 6 桁まで扱う。それ以上は丸める。 */
-const MAX_DECIMALS = 6;
+export const MAX_DECIMALS = 6;
+/** これ未満の総量は最小単位に届かず配分できない。 */
+export const MIN_TOTAL_AMOUNT = 1 / 10 ** MAX_DECIMALS;
 
 function decimalsOf(value: number): number {
   if (!Number.isFinite(value) || Number.isInteger(value)) return 0;
@@ -97,6 +99,9 @@ export function validateScheduleInput(input: ScheduleInput): string | null {
   }
   if (input.totalAmount > MAX_TOTAL_AMOUNT) {
     return `総量は ${MAX_TOTAL_AMOUNT} 以下で入力してください。`;
+  }
+  if (input.totalAmount < MIN_TOTAL_AMOUNT) {
+    return `総量は ${MIN_TOTAL_AMOUNT} 以上で入力してください。`;
   }
   if (
     input.roundingStep !== 'auto' &&
@@ -204,28 +209,42 @@ export function buildSchedule(input: ScheduleInput): Schedule {
 /**
  * プランからタスクを生成する。previousTasks を渡すと、同じ日付の実績
  * (doneAmount / isCompleted) を引き継ぐ。プラン編集時に記録を極力残すため。
- * 予備日には計画量が無いので、完了フラグは引き継がず実績量だけを残す。
+ *
+ * 予備日には計画量が無いので完了フラグは引き継がず、実績量だけを残す。
+ * 曜日設定の変更で学習しない日になった日も、実績が入っていれば予備日として残す
+ * (「土曜を休養日にしたら土曜にやった分が消えた」を防ぐ)。
  */
 export function generateTasks(plan: Plan, previousTasks: Task[] = []): Task[] {
   const schedule = buildSchedule(plan);
-  const previousByDate = new Map(
-    previousTasks.filter((task) => task.planId === plan.id).map((task) => [task.date, task]),
-  );
+  const planTasks = previousTasks.filter((task) => task.planId === plan.id);
+  const previousByDate = new Map(planTasks.map((task) => [task.date, task]));
 
-  return schedule.entries.map((entry) => {
+  const tasks: Task[] = schedule.entries.map((entry) => {
     const previous = previousByDate.get(entry.date);
-    const doneAmount = previous?.doneAmount ?? 0;
     return {
       id: `${plan.id}-${entry.date}`,
       planId: plan.id,
       date: entry.date,
       kind: entry.kind,
       plannedAmount: entry.plannedAmount,
-      doneAmount,
-      isCompleted:
-        entry.kind === 'study' && (previous?.isCompleted === true || doneAmount >= entry.plannedAmount)
-          ? true
-          : false,
+      doneAmount: previous?.doneAmount ?? 0,
+      isCompleted: entry.kind === 'study' && previous?.isCompleted === true,
+      checkedAt: previous?.checkedAt ?? null,
     };
   });
+
+  // 学習しない日になったが実績のある日を、記録として拾い直す。
+  const generatedDates = new Set(tasks.map((task) => task.date));
+  const salvaged = planTasks.filter(
+    (task) =>
+      task.doneAmount > 0 &&
+      !generatedDates.has(task.date) &&
+      task.date >= plan.startDate &&
+      task.date <= plan.endDate,
+  );
+  for (const task of salvaged) {
+    tasks.push({ ...task, kind: 'buffer', plannedAmount: 0, isCompleted: false });
+  }
+
+  return tasks.sort((a, b) => a.date.localeCompare(b.date));
 }

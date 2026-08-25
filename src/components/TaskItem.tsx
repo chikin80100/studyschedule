@@ -52,7 +52,7 @@ export default function TaskItem({ task, plan, showDate = false, onChange }: Pro
       {isBuffer ? (
         <span
           aria-hidden
-          className="flex size-7 shrink-0 items-center justify-center rounded-full border-2 border-dashed border-slate-300 text-xs text-slate-400"
+          className="flex size-10 shrink-0 items-center justify-center rounded-full border-2 border-dashed border-slate-300 text-sm text-slate-400"
         >
           +
         </span>
@@ -62,7 +62,7 @@ export default function TaskItem({ task, plan, showDate = false, onChange }: Pro
           onClick={toggleCompleted}
           aria-label={task.isCompleted ? '完了を取り消す' : '完了にする'}
           aria-pressed={task.isCompleted}
-          className={`flex size-7 shrink-0 items-center justify-center rounded-full border-2 text-sm transition ${
+          className={`flex size-10 shrink-0 items-center justify-center rounded-full border-2 text-base transition ${
             task.isCompleted
               ? 'border-emerald-500 bg-emerald-500 text-white'
               : 'border-slate-300 bg-white text-transparent hover:border-indigo-400'
@@ -124,7 +124,7 @@ export default function TaskItem({ task, plan, showDate = false, onChange }: Pro
         onKeyDown={(event) => {
           if (event.key === 'Enter') event.currentTarget.blur();
         }}
-        className="w-16 shrink-0 rounded-lg border border-slate-300 px-2 py-1 text-right text-sm"
+        className="h-10 w-16 shrink-0 rounded-lg border border-slate-300 px-2 text-right text-sm"
       />
     </li>
   );

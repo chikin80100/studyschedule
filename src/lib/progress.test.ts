@@ -30,7 +30,7 @@ function tasksCompletedThrough(through: string, base = generateTasks(plan)): Tas
 
 describe('computeStreak', () => {
   it('連続して達成した日数を数える', () => {
-    const streak = computeStreak(tasksCompletedThrough('2026-09-05'), '2026-09-05');
+    const streak = computeStreak([plan], tasksCompletedThrough('2026-09-05'), '2026-09-05');
     expect(streak.current).toBe(5);
     expect(streak.longest).toBe(5);
     expect(streak.achievedDays).toBe(5);
@@ -40,13 +40,13 @@ describe('computeStreak', () => {
     const tasks = tasksCompletedThrough('2026-09-05').map((task) =>
       task.date === '2026-09-03' ? { ...task, doneAmount: 0, isCompleted: false } : task,
     );
-    const streak = computeStreak(tasks, '2026-09-05');
+    const streak = computeStreak([plan], tasks, '2026-09-05');
     expect(streak.current).toBe(2); // 09-04, 09-05
     expect(streak.longest).toBe(2);
   });
 
   it('今日が未達成でも連続は途切れない', () => {
-    const streak = computeStreak(tasksCompletedThrough('2026-09-04'), '2026-09-05');
+    const streak = computeStreak([plan], tasksCompletedThrough('2026-09-04'), '2026-09-05');
     expect(streak.current).toBe(4);
   });
 
@@ -61,7 +61,7 @@ describe('computeStreak', () => {
     const tasks = generateTasks(restSunday).map((task) =>
       task.date <= '2026-09-08' ? { ...task, doneAmount: task.plannedAmount, isCompleted: true } : task,
     );
-    const streak = computeStreak(tasks, '2026-09-08');
+    const streak = computeStreak([plan], tasks, '2026-09-08');
     expect(streak.current).toBe(7); // 09-01〜09-05, 09-07, 09-08
   });
 
@@ -70,7 +70,7 @@ describe('computeStreak', () => {
     const tasks = generateTasks(buffered).map((task) =>
       task.kind === 'study' ? { ...task, doneAmount: task.plannedAmount, isCompleted: true } : task,
     );
-    const streak = computeStreak(tasks, '2026-09-10');
+    const streak = computeStreak([plan], tasks, '2026-09-10');
     expect(streak.current).toBe(tasks.filter((task) => task.kind === 'study').length);
   });
 
@@ -78,22 +78,56 @@ describe('computeStreak', () => {
     const tasks = tasksCompletedThrough('2026-09-10').map((task) =>
       task.date === '2026-09-08' ? { ...task, doneAmount: 0, isCompleted: false } : task,
     );
-    const streak = computeStreak(tasks, '2026-09-10');
+    const streak = computeStreak([plan], tasks, '2026-09-10');
     expect(streak.longest).toBe(7); // 09-01〜09-07
     expect(streak.current).toBe(2); // 09-09, 09-10
   });
 
   it('直近のカレンダーを指定日数ぶん返す', () => {
-    const streak = computeStreak(tasksCompletedThrough('2026-09-05'), '2026-09-05', 7);
+    const streak = computeStreak([plan], tasksCompletedThrough('2026-09-05'), '2026-09-05', 7);
     expect(streak.recent).toHaveLength(7);
     expect(streak.recent.at(-1)?.date).toBe('2026-09-05');
     expect(streak.recent.at(0)?.date).toBe('2026-08-30');
   });
 
   it('タスクが無くても落ちない', () => {
-    const streak = computeStreak([], '2026-09-05');
+    const streak = computeStreak([], [], '2026-09-05');
     expect(streak.current).toBe(0);
     expect(streak.longest).toBe(0);
+  });
+
+  it('プランが動いていない空白期間で連続が途切れる', () => {
+    const older: Plan = { ...plan, id: 'old', startDate: '2026-05-01', endDate: '2026-05-05' };
+    const recent: Plan = { ...plan, id: 'new', startDate: '2026-09-01', endDate: '2026-09-10' };
+    const tasks = [
+      ...generateTasks(older).map((t) => ({ ...t, doneAmount: t.plannedAmount, isCompleted: true })),
+      ...generateTasks(recent).map((t) =>
+        t.date <= '2026-09-02' ? { ...t, doneAmount: t.plannedAmount, isCompleted: true } : t,
+      ),
+    ];
+    const streak = computeStreak([older, recent], tasks, '2026-09-02');
+    expect(streak.current).toBe(2); // 5月の5日連続は数えない
+    expect(streak.longest).toBe(5);
+  });
+
+  it('予備日に実績を入れただけでは達成にならない', () => {
+    const buffered: Plan = { ...plan, bufferRatio: 0.5 };
+    const tasks = generateTasks(buffered).map((task) =>
+      task.kind === 'buffer' ? { ...task, doneAmount: 1 } : task,
+    );
+    const streak = computeStreak([buffered], tasks, '2026-09-10');
+    expect(streak.current).toBe(0);
+    expect(streak.achievedDays).toBe(0);
+  });
+
+  it('複数プランのうち1つでも未達成なら達成にならない', () => {
+    const other: Plan = { ...plan, id: 'plan-2' };
+    const tasks = [
+      ...tasksCompletedThrough('2026-09-05'),
+      ...generateTasks(other),
+    ];
+    const streak = computeStreak([plan, other], tasks, '2026-09-05');
+    expect(streak.current).toBe(0);
   });
 });
 
@@ -136,6 +170,25 @@ describe('findUncheckedTasks', () => {
   it('今日のタスクは対象外', () => {
     expect(findUncheckedTasks(generateTasks(plan), '2026-09-01')).toHaveLength(0);
   });
+
+  it('確認済みにした日は出てこない', () => {
+    const tasks = generateTasks(plan).map((task) =>
+      task.date === '2026-09-03' ? { ...task, checkedAt: '2026-09-05' } : task,
+    );
+    const unchecked = findUncheckedTasks(tasks, '2026-09-05');
+    expect(unchecked.map((task) => task.date)).toEqual(['2026-09-01', '2026-09-02', '2026-09-04']);
+  });
+
+  it('古すぎる日は出てこない', () => {
+    // 既定では直近14日ぶんだけを見る
+    expect(findUncheckedTasks(generateTasks(plan), '2030-01-01')).toHaveLength(0);
+  });
+
+  it('予備日は確認の対象外', () => {
+    const buffered = { ...plan, bufferRatio: 0.5 };
+    const unchecked = findUncheckedTasks(generateTasks(buffered), '2026-09-10');
+    expect(unchecked.every((task) => task.kind === 'study')).toBe(true);
+  });
 });
 
 describe('rescheduleFrom', () => {
@@ -163,8 +216,58 @@ describe('rescheduleFrom', () => {
     const tasks = tasksCompletedThrough('2026-09-10');
     const result = rescheduleFrom(plan, tasks, '2026-09-05');
     expect(result.remainingAmount).toBe(0);
-    const future = result.tasks.filter((task) => task.date >= '2026-09-05');
+    const future = result.tasks.filter((task) => task.date > '2026-09-05');
     expect(future.every((task) => task.kind === 'buffer' && task.plannedAmount === 0)).toBe(true);
+  });
+
+  it('今日の分を終えていれば翌日から配り直す(今日に二重で割り当てない)', () => {
+    const tasks = tasksCompletedThrough('2026-09-01');
+    const result = rescheduleFrom(plan, tasks, '2026-09-01');
+    const todayTask = result.tasks.find((task) => task.date === '2026-09-01');
+    expect(todayTask?.doneAmount).toBe(10);
+    expect(todayTask?.plannedAmount).toBe(10); // 実績で確定し、追加の割り当ては入らない
+    const future = result.tasks.filter((task) => task.date > '2026-09-01');
+    expect(sumBy(future, (task) => task.plannedAmount)).toBe(90);
+  });
+
+  it('残り期間に学習日が無くても例外を投げない', () => {
+    // 日曜だけ学習するプランで、最後の日曜を過ぎてから配り直す
+    const sundayOnly: Plan = {
+      ...plan,
+      startDate: '2026-09-01',
+      endDate: '2026-09-09',
+      weekdaySettings: createDefaultWeekdaySettings().map((s) => ({
+        ...s,
+        weight: s.dayOfWeek === 0 ? 1 : 0,
+      })),
+    };
+    const result = rescheduleFrom(sundayOnly, generateTasks(sundayOnly), '2026-09-08');
+    expect(result.hasNoRoom).toBe(true);
+    expect(result.tasks.every((task) => task.date < '2026-09-08' || task.kind === 'buffer')).toBe(
+      true,
+    );
+  });
+
+  it('再計画すると遅れ表示が解消され、計画量の合計が総量を超えない', () => {
+    const tasks = generateTasks(plan); // 何もやっていない
+    expect(shouldSuggestReschedule(plan, tasks, '2026-09-06')).toBe(true);
+
+    const result = rescheduleFrom(plan, tasks, '2026-09-06');
+    expect(shouldSuggestReschedule(plan, result.tasks, '2026-09-06')).toBe(false);
+    expect(computePace(plan, result.tasks, '2026-09-06').delta).toBe(0);
+    expect(sumBy(result.tasks, (task) => task.plannedAmount)).toBe(100);
+  });
+
+  it('繰り返し呼んでも結果が安定する', () => {
+    let tasks = generateTasks(plan);
+    const runs = [];
+    for (let i = 0; i < 3; i += 1) {
+      const result = rescheduleFrom(plan, tasks, '2026-09-06');
+      tasks = result.tasks;
+      runs.push(result.maxDailyAmount);
+    }
+    expect(new Set(runs).size).toBe(1);
+    expect(sumBy(tasks, (task) => task.plannedAmount)).toBe(100);
   });
 
   it('期間が終わっていれば計画量を作らない', () => {
@@ -188,6 +291,7 @@ describe('rescheduleFrom', () => {
       plannedAmount: 5,
       doneAmount: 5,
       isCompleted: true,
+      checkedAt: null,
     };
     const result = rescheduleFrom(plan, [...generateTasks(plan), other], '2026-09-04');
     expect(result.tasks.every((task) => task.planId === 'plan-1')).toBe(true);

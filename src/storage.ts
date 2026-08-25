@@ -2,6 +2,7 @@ import type { AppData, DayOfWeek, Plan, RoundingStep, Task, WeekdaySetting } fro
 import { CURRENT_DATA_VERSION, DAYS_OF_WEEK, createDefaultWeekdaySettings } from './types';
 import { isValidDateString } from './lib/date';
 import { validateScheduleInput } from './lib/taskGenerator';
+import { roundAmount } from './lib/amount';
 
 const STORAGE_KEY = 'studyschedule.v1';
 
@@ -65,7 +66,8 @@ function parsePlan(value: unknown): Plan | null {
     unit: asString(value.unit, ''),
     startDate,
     endDate,
-    totalAmount: asNumber(value.totalAmount, 0),
+    // 小数7桁以上は最小単位に収まらないので、読み込んだ時点で丸める。
+    totalAmount: roundAmount(asNumber(value.totalAmount, 0)),
     weekdaySettings: parseWeekdaySettings(value.weekdaySettings),
     bufferRatio: Math.min(0.5, Math.max(0, asNumber(value.bufferRatio, 0))),
     roundingStep: parseRoundingStep(value.roundingStep),
@@ -83,14 +85,16 @@ function parseTask(value: unknown, planIds: Set<string>): Task | null {
   if (!id || !planIds.has(planId) || !isValidDateString(date)) return null;
 
   const kind = value.kind === 'buffer' ? 'buffer' : 'study';
+  const checkedAt = asString(value.checkedAt, '');
   return {
     id,
     planId,
     date,
     kind,
-    plannedAmount: kind === 'buffer' ? 0 : Math.max(0, asNumber(value.plannedAmount, 0)),
-    doneAmount: Math.max(0, asNumber(value.doneAmount, 0)),
+    plannedAmount: kind === 'buffer' ? 0 : Math.max(0, roundAmount(asNumber(value.plannedAmount, 0))),
+    doneAmount: Math.max(0, roundAmount(asNumber(value.doneAmount, 0))),
     isCompleted: kind === 'study' && value.isCompleted === true,
+    checkedAt: isValidDateString(checkedAt) ? checkedAt : null,
   };
 }
 
@@ -135,11 +139,14 @@ export function load(): AppData {
   }
 }
 
-export function save(data: AppData): void {
+/** 保存できたら true。容量超過などで失敗したら false(呼び出し側で知らせる)。 */
+export function save(data: AppData): boolean {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    return true;
   } catch (error) {
     console.error('データの保存に失敗しました', error);
+    return false;
   }
 }
 
@@ -151,7 +158,7 @@ export function exportToJson(data: AppData): string {
  * インポート用。読み込んだデータで既存データを置き換えるので、
  * 「このアプリのデータではない JSON」を黙って受け入れて全消しにしないよう厳しめに弾く。
  */
-export function importFromJson(json: string): AppData {
+export function importFromJson(json: string): ParseResult {
   const parsed: unknown = JSON.parse(json);
   if (!isRecord(parsed) || !Array.isArray(parsed.plans)) {
     throw new Error('StudySchedule のデータではないようです。');
@@ -160,5 +167,5 @@ export function importFromJson(json: string): AppData {
   if (result.inputPlanCount > 0 && result.data.plans.length === 0) {
     throw new Error('プランを1件も読み込めませんでした。ファイルが壊れている可能性があります。');
   }
-  return result.data;
+  return result;
 }
