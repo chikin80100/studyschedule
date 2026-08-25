@@ -25,7 +25,10 @@ export type Schedule = {
   step: number;
   /** 1日あたりの計画量の最大値 */
   maxDailyAmount: number;
-  /** 計画量の合計。丸め誤差を挟まずに算出した値で、totalAmount と一致する。 */
+  /**
+   * 計画量の合計。丸め誤差を挟まずに算出した値で、totalAmount と一致する
+   * (総量に小数7桁以上が入っていた場合は、6桁に丸めた値と一致する)。
+   */
   plannedTotal: number;
   /** 最後に計画量が入る日。study 日が無ければ null。 */
   finishDate: string | null;

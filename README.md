@@ -58,7 +58,7 @@ npm run dev      # http://localhost:5173/studyschedule/
 その他のコマンド:
 
 ```bash
-npm test         # 単体テスト (120件)
+npm test         # 単体テスト (122件、ランダム入力での不変条件チェックを含む)
 npm run test:tz  # 主要なタイムゾーンでテストを回す
 npm run build    # 型チェック + 本番ビルド (dist/)
 npm run preview  # ビルド結果を確認

@@ -7,7 +7,7 @@ import {
   validateScheduleInput,
 } from './taskGenerator';
 import type { ScheduleInput } from './taskGenerator';
-import { sumBy } from './amount';
+import { roundAmount, sumBy } from './amount';
 import { createDefaultWeekdaySettings } from '../types';
 import type { DayOfWeek, Plan, Task } from '../types';
 
@@ -158,6 +158,13 @@ describe('buildSchedule: 合計量の一致(不変条件)', () => {
       expect(schedule.plannedTotal).toBe(totalAmount);
       expect(schedule.studyDayCount).toBeGreaterThan(0);
     }
+  });
+
+  it('小数7桁以上の総量は 6 桁に丸めて配分する', () => {
+    // アプリの入力経路では丸めた値が渡るが、直接呼ばれても破綻しないことを確かめる。
+    const schedule = buildSchedule(input({ totalAmount: 33.3333333 }));
+    expect(schedule.plannedTotal).toBe(33.333333);
+    expect(sumPlanned(schedule.entries)).toBe(33.333333);
   });
 
   it('最小単位に届かない総量は受け付けない', () => {
@@ -339,6 +346,74 @@ describe('buildSchedule: 境界', () => {
   it('全曜日休養日なら例外を投げる', () => {
     const settings = createDefaultWeekdaySettings().map((s) => ({ ...s, isRestDay: true }));
     expect(() => buildSchedule(input({ weekdaySettings: settings }))).toThrow(/学習する日/);
+  });
+});
+
+describe('buildSchedule: ランダム入力での不変条件', () => {
+  /** 乱数は固定シードで回し、失敗したときに同じ入力を再現できるようにする。 */
+  function makeRandom(seed: number) {
+    let state = seed;
+    return () => {
+      state = (state * 1103515245 + 12345) % 2 ** 31;
+      return state / 2 ** 31;
+    };
+  }
+
+  it('どんな組み合わせでも計画量の合計が総量と一致し、予備日の量は 0 になる', () => {
+    const random = makeRandom(20260825);
+    const pick = <T,>(items: readonly T[]): T => items[Math.floor(random() * items.length)];
+    const steps = ['auto', 0.1, 0.5, 1, 5, 10] as const;
+    let checked = 0;
+
+    for (let i = 0; i < 2000; i += 1) {
+      const startDate = `2026-${`${1 + Math.floor(random() * 12)}`.padStart(2, '0')}-${`${1 + Math.floor(random() * 28)}`.padStart(2, '0')}`;
+      const endDate = new Date(
+        new Date(`${startDate}T00:00:00Z`).getTime() + Math.floor(random() * 400) * 86_400_000,
+      )
+        .toISOString()
+        .slice(0, 10);
+      const candidate = {
+        startDate,
+        endDate,
+        // アプリの入力経路 (PlanForm / storage) は総量を 6 桁に丸めて渡すので、
+        // ここでも同じ形の値を作る。
+        totalAmount: roundAmount(
+          pick([
+            Math.floor(random() * 1000) + 1,
+            Math.round(random() * 10000) / 100 + 0.01,
+            Math.round(random() * 100) / 10 + 0.1,
+          ]),
+        ),
+        weekdaySettings: createDefaultWeekdaySettings().map((setting) => ({
+          ...setting,
+          isRestDay: random() < 0.2,
+          weight: pick([0, 0.5, 1, 1.5, 2, 3]),
+        })),
+        bufferRatio: pick([0, 0.1, 0.15, 0.25, 0.4, 0.5]),
+        roundingStep: pick(steps),
+      };
+      if (validateScheduleInput(candidate) !== null) continue;
+
+      checked += 1;
+      const schedule = buildSchedule(candidate);
+      expect(schedule.plannedTotal).toBe(candidate.totalAmount);
+      expect(sumPlanned(schedule.entries)).toBe(candidate.totalAmount);
+      expect(schedule.studyDayCount).toBeGreaterThan(0);
+      expect(
+        schedule.entries.every(
+          (entry) =>
+            Number.isFinite(entry.plannedAmount) &&
+            entry.plannedAmount >= 0 &&
+            (entry.kind === 'study' ? entry.plannedAmount > 0 : entry.plannedAmount === 0),
+        ),
+      ).toBe(true);
+
+      const dates = schedule.entries.map((entry) => entry.date);
+      expect(dates).toEqual([...dates].sort());
+      expect(new Set(dates).size).toBe(dates.length);
+    }
+
+    expect(checked).toBeGreaterThan(1000);
   });
 });
 
