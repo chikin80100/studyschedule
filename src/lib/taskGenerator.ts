@@ -233,6 +233,7 @@ export function generateTasks(plan: Plan, previousTasks: Task[] = []): Task[] {
       doneAmount: previous?.doneAmount ?? 0,
       isCompleted: entry.kind === 'study' && previous?.isCompleted === true,
       checkedAt: previous?.checkedAt ?? null,
+      supersededAt: previous?.supersededAt ?? null,
     };
   });
 

@@ -172,13 +172,22 @@ export type PaceSummary = {
   isFinished: boolean;
 };
 
+/**
+ * 指定日より前に終えているはずの量。
+ * 再計画で確定した日 (supersededAt) は、旧計画ではなく実際にやった量で数える。
+ * こうしないと、配り直したあとも古い未達分が遅れとして残り続けてしまう。
+ */
+export function expectedAmountBefore(tasks: Task[], today: string): number {
+  return sumBy(
+    tasks.filter((task) => task.date < today),
+    (task) => (task.supersededAt === null ? task.plannedAmount : task.doneAmount),
+  );
+}
+
 /** 今日時点で計画に対して進んでいるか遅れているかを出す。 */
 export function computePace(plan: Plan, tasks: Task[], today = todayString()): PaceSummary {
   const planTasks = tasks.filter((task) => task.planId === plan.id);
-  const expectedAmount = sumBy(
-    planTasks.filter((task) => task.date < today),
-    (task) => task.plannedAmount,
-  );
+  const expectedAmount = expectedAmountBefore(planTasks, today);
   const doneAmount = sumBy(planTasks, (task) => task.doneAmount);
   const remainingAmount = roundAmount(Math.max(0, plan.totalAmount - doneAmount));
   const remainingBufferDays = planTasks.filter(

@@ -80,6 +80,7 @@ describe('parseAppData', () => {
       doneAmount: 0,
       isCompleted: false,
       checkedAt: null,
+      supersededAt: null,
     };
     expect(parseAppData(dataWith([plan], [orphan])).data.tasks).toHaveLength(0);
   });
@@ -107,6 +108,7 @@ describe('parseAppData', () => {
       doneAmount: 3,
       isCompleted: true,
       checkedAt: null,
+      supersededAt: null,
     };
     const restored = parseAppData(dataWith([plan], [task])).data.tasks[0];
     expect(restored.plannedAmount).toBe(0);

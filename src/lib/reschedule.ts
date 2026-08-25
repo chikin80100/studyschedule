@@ -2,6 +2,7 @@ import type { Plan, Task } from '../types';
 import { buildSchedule, validateScheduleInput } from './taskGenerator';
 import { addDays, today as todayString } from './date';
 import { roundAmount, sumBy } from './amount';
+import { expectedAmountBefore } from './progress';
 
 export type RescheduleResult = {
   tasks: Task[];
@@ -17,19 +18,21 @@ export type RescheduleResult = {
 };
 
 /**
- * 過ぎた日のタスクを「記録」に変える。
+ * 過ぎた日のタスクを「確定した記録」に変える。
  *
- * 再計画したあとも旧計画の未達分が残っていると、いつまでも「遅れています」と
- * 言われ続け、計画量の合計も総量を超えてしまう。配り直した時点で過去の日の
- * 計画量は実績で確定させ、確認済みにする。実績が 0 の日は 0 のまま残るので、
- * 連続達成記録の履歴(その日は達成できなかった)は失われない。
+ * 再計画したあとも旧計画の未達分が遅れとして残っていると、いつまでも
+ * 「遅れています」と言われ続けてしまう。配り直した時点で過去の日には
+ * supersededAt を立て、以後は「その日にやった量」で確定したものとして扱う。
+ *
+ * plannedAmount は書き換えない。書き換えると「計画があったのにできなかった日」が
+ * 「もともと予定の無い日」に化けて、連続達成記録の履歴が水増しされてしまう。
  */
 function settlePastTasks(tasks: Task[], asOf: string): Task[] {
-  return tasks.map((task) =>
-    task.kind === 'study'
-      ? { ...task, plannedAmount: task.doneAmount, checkedAt: task.checkedAt ?? asOf }
-      : { ...task, checkedAt: task.checkedAt ?? asOf },
-  );
+  return tasks.map((task) => ({
+    ...task,
+    checkedAt: task.checkedAt ?? asOf,
+    supersededAt: task.supersededAt ?? asOf,
+  }));
 }
 
 function toBufferTasks(tasks: Task[]): Task[] {
@@ -108,6 +111,7 @@ export function rescheduleFrom(
       doneAmount: previous?.doneAmount ?? 0,
       isCompleted: entry.kind === 'study' && (previous?.doneAmount ?? 0) >= entry.plannedAmount,
       checkedAt: previous?.checkedAt ?? null,
+      supersededAt: null,
     };
   });
 
@@ -135,10 +139,7 @@ export function shouldSuggestReschedule(
 ): boolean {
   if (today > plan.endDate) return false;
   const planTasks = tasks.filter((task) => task.planId === plan.id);
-  const expected = sumBy(
-    planTasks.filter((task) => task.date < today),
-    (task) => task.plannedAmount,
-  );
+  const expected = expectedAmountBefore(planTasks, today);
   const done = sumBy(planTasks, (task) => task.doneAmount);
   if (done >= plan.totalAmount) return false;
   return roundAmount(done - expected) < 0;

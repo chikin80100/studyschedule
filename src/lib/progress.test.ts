@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { computePace, computeStreak, findUncheckedTasks } from './progress';
+import {
+  collectDayRecords,
+  computePace,
+  computeStreak,
+  expectedAmountBefore,
+  findUncheckedTasks,
+} from './progress';
 import { rescheduleFrom, shouldSuggestReschedule } from './reschedule';
 import { generateTasks } from './taskGenerator';
 import { sumBy } from './amount';
@@ -248,14 +254,34 @@ describe('rescheduleFrom', () => {
     );
   });
 
-  it('再計画すると遅れ表示が解消され、計画量の合計が総量を超えない', () => {
+  it('再計画すると遅れ表示が解消され、これから取り組む量が残量と一致する', () => {
     const tasks = generateTasks(plan); // 何もやっていない
     expect(shouldSuggestReschedule(plan, tasks, '2026-09-06')).toBe(true);
 
     const result = rescheduleFrom(plan, tasks, '2026-09-06');
     expect(shouldSuggestReschedule(plan, result.tasks, '2026-09-06')).toBe(false);
     expect(computePace(plan, result.tasks, '2026-09-06').delta).toBe(0);
-    expect(sumBy(result.tasks, (task) => task.plannedAmount)).toBe(100);
+    // 確定した過去は「やった量」で数えるので、昨日までの計画は 0 になる
+    expect(expectedAmountBefore(result.tasks, '2026-09-06')).toBe(0);
+    // これから取り組む量が総量と一致する
+    const future = result.tasks.filter((task) => task.date >= '2026-09-06');
+    expect(sumBy(future, (task) => task.plannedAmount)).toBe(100);
+  });
+
+  it('再計画しても、できなかった日の履歴は残る', () => {
+    const tasks = generateTasks(plan).map((task) =>
+      ['2026-09-01', '2026-09-02'].includes(task.date)
+        ? { ...task, doneAmount: 10, isCompleted: true }
+        : task,
+    );
+    const result = rescheduleFrom(plan, tasks, '2026-09-05');
+    const records = collectDayRecords(result.tasks);
+    expect(records.get('2026-09-01')?.status).toBe('achieved');
+    expect(records.get('2026-09-03')?.status).toBe('missed');
+    // 未達成の日が「予定の無い日」に化けて連続記録が水増しされない
+    const streak = computeStreak([plan], result.tasks, '2026-09-05');
+    expect(streak.current).toBe(0);
+    expect(streak.longest).toBe(2);
   });
 
   it('繰り返し呼んでも結果が安定する', () => {
@@ -267,7 +293,9 @@ describe('rescheduleFrom', () => {
       runs.push(result.maxDailyAmount);
     }
     expect(new Set(runs).size).toBe(1);
-    expect(sumBy(tasks, (task) => task.plannedAmount)).toBe(100);
+    expect(shouldSuggestReschedule(plan, tasks, '2026-09-06')).toBe(false);
+    const future = tasks.filter((task) => task.date >= '2026-09-06');
+    expect(sumBy(future, (task) => task.plannedAmount)).toBe(100);
   });
 
   it('期間が終わっていれば計画量を作らない', () => {
@@ -292,6 +320,7 @@ describe('rescheduleFrom', () => {
       doneAmount: 5,
       isCompleted: true,
       checkedAt: null,
+      supersededAt: null,
     };
     const result = rescheduleFrom(plan, [...generateTasks(plan), other], '2026-09-04');
     expect(result.tasks.every((task) => task.planId === 'plan-1')).toBe(true);

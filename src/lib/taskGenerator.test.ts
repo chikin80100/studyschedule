@@ -481,6 +481,7 @@ describe('generateTasks', () => {
         doneAmount: 99,
         isCompleted: true,
         checkedAt: null,
+        supersededAt: null,
       },
     ];
     const tasks = generateTasks(plan, foreign);

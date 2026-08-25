@@ -86,6 +86,7 @@ function parseTask(value: unknown, planIds: Set<string>): Task | null {
 
   const kind = value.kind === 'buffer' ? 'buffer' : 'study';
   const checkedAt = asString(value.checkedAt, '');
+  const supersededAt = asString(value.supersededAt, '');
   return {
     id,
     planId,
@@ -95,6 +96,7 @@ function parseTask(value: unknown, planIds: Set<string>): Task | null {
     doneAmount: Math.max(0, roundAmount(asNumber(value.doneAmount, 0))),
     isCompleted: kind === 'study' && value.isCompleted === true,
     checkedAt: isValidDateString(checkedAt) ? checkedAt : null,
+    supersededAt: isValidDateString(supersededAt) ? supersededAt : null,
   };
 }
 
