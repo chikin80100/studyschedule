@@ -70,12 +70,17 @@ npm run preview  # ビルド結果を確認
 ## GitHub Pages で公開する
 
 `.github/workflows/deploy.yml` が用意してあり、`main` ブランチに push すると自動でビルド・デプロイされます。
-ワークフローの `actions/configure-pages` に `enablement: true` を指定しているので、
-Pages が未設定でも初回実行時に有効化されます。
+**最初に一度だけ**、リポジトリ側で2つの設定が必要です(どちらも API から変更できないため手作業です)。
 
-うまく有効化されなかった場合は、リポジトリの **Settings** → **Pages** →
-**Build and deployment** の **Source** を **GitHub Actions** に変更してから、
-Actions タブで `Deploy to GitHub Pages` を再実行してください。
+1. **Settings → Pages → Build and deployment → Source** を **GitHub Actions** に変更する
+   これが「Deploy from a branch」のままだと、`github-pages` 環境が
+   `Branch "main" is not allowed to deploy to github-pages due to environment protection rules.`
+   でデプロイジョブを弾きます。
+2. **Settings → General → Default branch** を **`main`** にする
+   `github-pages` 環境はデフォルトブランチからのデプロイを許可するため、
+   `main` をデフォルトにしておく必要があります。
+
+設定後、Actions タブの `Deploy to GitHub Pages` を再実行するか、`main` に何か push すればデプロイされます。
 
 公開先は `https://<ユーザー名>.github.io/studyschedule/` です。
 

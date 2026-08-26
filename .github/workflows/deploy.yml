@@ -26,32 +26,9 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
-      # Pages のソースを「GitHub Actions」に切り替える。
-      # 「Deploy from a branch」のままだと deploy ジョブが github-pages 環境で弾かれる。
-      # configure-pages の enablement は「未有効なら有効化」しかしないため、
-      # 既に別ソースで有効な場合はここで明示的に上書きする。
-      - name: Pages のソースを GitHub Actions にする
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          status=$(curl -sS -o /tmp/pages.json -w '%{http_code}' -X PUT \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            "https://api.github.com/repos/${{ github.repository }}/pages" \
-            -d '{"build_type":"workflow"}') || true
-          echo "PUT /pages -> $status"
-          cat /tmp/pages.json 2>/dev/null || true
-          # 404 (サイト未作成) の場合は作成を試みる
-          if [ "$status" = "404" ]; then
-            curl -sS -X POST \
-              -H "Authorization: Bearer $GH_TOKEN" \
-              -H "Accept: application/vnd.github+json" \
-              -H "X-GitHub-Api-Version: 2022-11-28" \
-              "https://api.github.com/repos/${{ github.repository }}/pages" \
-              -d '{"build_type":"workflow"}' || true
-          fi
-
+      # Pages が未設定なら有効化する。すでに別のソースで有効な場合は
+      # 切り替えられないので、リポジトリの Settings → Pages で
+      # Source を「GitHub Actions」にする必要がある (README 参照)。
       - uses: actions/configure-pages@v5
         with:
           enablement: true
