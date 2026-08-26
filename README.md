@@ -1,5 +1,7 @@
 # StudySchedule — 勉強習慣化・管理アプリ
 
+**公開先: https://chikin80100.github.io/studyschedule/**
+
 学習の **内容・期間・量** を入力すると、1日ごとのタスクを自動で作ってくれるアプリです。
 毎日の完了確認、進捗に応じた計画の修正、連続達成記録(ストリーク)まで一通り揃っています。
 
@@ -68,11 +70,12 @@ npm run preview  # ビルド結果を確認
 ## GitHub Pages で公開する
 
 `.github/workflows/deploy.yml` が用意してあり、`main` ブランチに push すると自動でビルド・デプロイされます。
-**最初に一度だけ**、リポジトリ側の設定が必要です。
+ワークフローの `actions/configure-pages` に `enablement: true` を指定しているので、
+Pages が未設定でも初回実行時に有効化されます。
 
-1. GitHub のリポジトリ → **Settings** → **Pages** を開く
-2. **Build and deployment** の **Source** を **GitHub Actions** に変更する
-3. `main` に push する(または Actions タブから `Deploy to GitHub Pages` を手動実行する)
+うまく有効化されなかった場合は、リポジトリの **Settings** → **Pages** →
+**Build and deployment** の **Source** を **GitHub Actions** に変更してから、
+Actions タブで `Deploy to GitHub Pages` を再実行してください。
 
 公開先は `https://<ユーザー名>.github.io/studyschedule/` です。
 
