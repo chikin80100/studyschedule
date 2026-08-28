@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   collectDayRecords,
+  computeDayCompletion,
   computePace,
   computeStreak,
   expectedAmountBefore,
@@ -134,6 +135,76 @@ describe('computeStreak', () => {
     ];
     const streak = computeStreak([plan, other], tasks, '2026-09-05');
     expect(streak.current).toBe(0);
+  });
+});
+
+describe('computeDayCompletion', () => {
+  const other: Plan = { ...plan, id: 'plan-2', title: '数学' };
+
+  /** 同じ日に2件のタスクがある状態を作る (量は 10 と 50 で差をつける) */
+  function twoPlanTasks(): Task[] {
+    return [
+      ...generateTasks(plan),
+      ...generateTasks({ ...other, totalAmount: 500 }),
+    ];
+  }
+
+  it('件数の割合で出す(量の大小に引きずられない)', () => {
+    const tasks = twoPlanTasks().map((task) =>
+      task.planId === 'plan-1' && task.date === '2026-09-01'
+        ? { ...task, doneAmount: task.plannedAmount, isCompleted: true }
+        : task,
+    );
+    const result = computeDayCompletion(tasks, '2026-09-01');
+    // 量で見れば 10/60 だが、件数では 1/2
+    expect(result.total).toBe(2);
+    expect(result.completed).toBe(1);
+    expect(result.ratio).toBe(0.5);
+  });
+
+  it('すべて終えれば 1 になる', () => {
+    const tasks = twoPlanTasks().map((task) =>
+      task.date === '2026-09-01'
+        ? { ...task, doneAmount: task.plannedAmount, isCompleted: true }
+        : task,
+    );
+    expect(computeDayCompletion(tasks, '2026-09-01').ratio).toBe(1);
+  });
+
+  it('実績が計画量に届いていれば完了扱いにする', () => {
+    const tasks = generateTasks(plan).map((task) =>
+      task.date === '2026-09-01' ? { ...task, doneAmount: task.plannedAmount } : task,
+    );
+    expect(computeDayCompletion(tasks, '2026-09-01').completed).toBe(1);
+  });
+
+  it('一部だけ進んだタスクは完了に数えない', () => {
+    const tasks = generateTasks(plan).map((task) =>
+      task.date === '2026-09-01' ? { ...task, doneAmount: 1 } : task,
+    );
+    const result = computeDayCompletion(tasks, '2026-09-01');
+    expect(result.completed).toBe(0);
+    expect(result.ratio).toBe(0);
+  });
+
+  it('予備日と休養日は数えない', () => {
+    const buffered = { ...plan, bufferRatio: 0.5 };
+    const tasks = generateTasks(buffered);
+    const bufferDate = tasks.find((task) => task.kind === 'buffer')?.date;
+    expect(bufferDate).toBeDefined();
+    expect(computeDayCompletion(tasks, bufferDate!)).toEqual({
+      total: 0,
+      completed: 0,
+      ratio: 0,
+    });
+  });
+
+  it('タスクが無い日は 0 件・0%', () => {
+    expect(computeDayCompletion(generateTasks(plan), '2030-01-01')).toEqual({
+      total: 0,
+      completed: 0,
+      ratio: 0,
+    });
   });
 });
 

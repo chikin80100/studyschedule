@@ -25,6 +25,33 @@ function isTaskDone(task: Task): boolean {
   return task.isCompleted || task.doneAmount >= task.plannedAmount;
 }
 
+export type DayCompletion = {
+  /** その日の計画があるタスクの数 */
+  total: number;
+  /** そのうち終わっているタスクの数 */
+  completed: number;
+  /** 0〜1。計画のあるタスクが無い日は 0。 */
+  ratio: number;
+};
+
+/**
+ * その日の達成率を「終えたタスク数 ÷ 計画のあるタスク数」で出す。
+ * 量ではなく件数で見るので、量の大きいプランに引きずられず、
+ * 「今日やることを何個片づけたか」がそのまま出る。
+ * 予備日・休養日は計画が無いので数えない。
+ */
+export function computeDayCompletion(tasks: Task[], date: string): DayCompletion {
+  const dayTasks = tasks.filter(
+    (task) => task.date === date && task.kind === 'study' && task.plannedAmount > 0,
+  );
+  const completed = dayTasks.filter(isTaskDone).length;
+  return {
+    total: dayTasks.length,
+    completed,
+    ratio: dayTasks.length > 0 ? completed / dayTasks.length : 0,
+  };
+}
+
 /** 日付ごとに全プランのタスクをまとめる。 */
 export function collectDayRecords(tasks: Task[]): Map<string, DayRecord> {
   const records = new Map<string, DayRecord>();

@@ -3,11 +3,15 @@ import { Link } from 'react-router-dom';
 import type { AppDataApi } from '../hooks/usePlans';
 import { usePlanProgress } from '../hooks/usePlans';
 import { useToday } from '../hooks/useToday';
-import { computePace, computeStreak, findUncheckedTasks } from '../lib/progress';
+import {
+  computeDayCompletion,
+  computePace,
+  computeStreak,
+  findUncheckedTasks,
+} from '../lib/progress';
 import { rescheduleFrom, shouldSuggestReschedule } from '../lib/reschedule';
 import { formatLong } from '../lib/date';
-import { formatAmount } from '../lib/format';
-import { sumBy } from '../lib/amount';
+import { formatAmount, formatPercent } from '../lib/format';
 import TaskItem from '../components/TaskItem';
 import StreakCard from '../components/StreakCard';
 import ProgressBar from '../components/ProgressBar';
@@ -44,9 +48,8 @@ export default function Dashboard({ api }: { api: AppDataApi }) {
     (plan) => plan.startDate <= today && today <= plan.endDate,
   );
 
-  const todayPlanned = sumBy(todayTasks, (task) => task.plannedAmount);
-  const todayDone = sumBy(todayTasks, (task) => Math.min(task.doneAmount, task.plannedAmount));
-  const todayRatio = todayPlanned > 0 ? todayDone / todayPlanned : 0;
+  // 達成率は量ではなくタスク件数で出す。
+  const todayCompletion = computeDayCompletion(api.data.tasks, today);
   const studyTasksToday = todayTasks.filter(
     (task) => task.kind === 'study' && task.plannedAmount > 0,
   );
@@ -198,11 +201,20 @@ export default function Dashboard({ api }: { api: AppDataApi }) {
       <section className="rounded-2xl border border-slate-200 bg-white p-4">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold text-slate-700">今日の達成率</h3>
-          <span className="text-sm font-bold tabular-nums text-indigo-600">
-            {Math.round(todayRatio * 100)}%
-          </span>
+          <div className="flex items-baseline gap-2">
+            <span className="text-xs tabular-nums text-slate-500">
+              {todayCompletion.completed} / {todayCompletion.total} 件
+            </span>
+            <span className="text-sm font-bold tabular-nums text-indigo-600">
+              {formatPercent(todayCompletion.ratio)}
+            </span>
+          </div>
         </div>
-        <ProgressBar ratio={todayRatio} className="mt-2" tone={todayRatio >= 1 ? 'emerald' : 'indigo'} />
+        <ProgressBar
+          ratio={todayCompletion.ratio}
+          className="mt-2"
+          tone={todayCompletion.ratio >= 1 ? 'emerald' : 'indigo'}
+        />
 
         {studyTasksToday.length === 0 ? (
           <p className="mt-4 rounded-xl bg-slate-50 px-3 py-4 text-center text-sm text-slate-500">
