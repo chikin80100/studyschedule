@@ -24,6 +24,7 @@ const plan: Plan = {
   bufferRatio: 0,
   roundingStep: 1,
   createdAt: '2026-08-25T00:00:00.000Z',
+  updatedAt: '2026-08-25T00:00:00.000Z',
 };
 
 /** 指定した日付までを完了済みにしたタスク一覧を作る。 */
@@ -392,6 +393,7 @@ describe('rescheduleFrom', () => {
       isCompleted: true,
       checkedAt: null,
       supersededAt: null,
+      updatedAt: '2026-08-25T00:00:00.000Z',
     };
     const result = rescheduleFrom(plan, [...generateTasks(plan), other], '2026-09-04');
     expect(result.tasks.every((task) => task.planId === 'plan-1')).toBe(true);

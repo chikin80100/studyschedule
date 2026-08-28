@@ -1,8 +1,10 @@
 import { useRef, useState } from 'react';
 import type { AppDataApi } from '../hooks/usePlans';
+import type { SyncApi } from '../hooks/useSync';
 import { emptyData, exportToJson, importFromJson } from '../storage';
+import SyncSection from '../components/SyncSection';
 
-export default function Settings({ api }: { api: AppDataApi }) {
+export default function Settings({ api, sync }: { api: AppDataApi; sync: SyncApi }) {
   const fileInput = useRef<HTMLInputElement>(null);
   const [message, setMessage] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
 
@@ -49,7 +51,12 @@ export default function Settings({ api }: { api: AppDataApi }) {
 
   const handleReset = () => {
     if (!window.confirm('すべてのプランと記録を削除します。元に戻せません。よろしいですか?')) return;
-    api.replaceAll(emptyData());
+    // 同期している場合に他の端末から復活しないよう、削除したことを記録に残す。
+    const deletedAt = new Date().toISOString();
+    api.replaceAll({
+      ...emptyData(),
+      deletions: api.data.plans.map((plan) => ({ planId: plan.id, deletedAt })),
+    });
     setMessage({ tone: 'ok', text: 'すべてのデータを削除しました。' });
   };
 
@@ -68,6 +75,8 @@ export default function Settings({ api }: { api: AppDataApi }) {
           {message.text}
         </div>
       )}
+
+      <SyncSection sync={sync} />
 
       <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
         <div>

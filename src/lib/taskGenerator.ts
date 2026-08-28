@@ -1,4 +1,5 @@
 import type { Plan, RoundingStep, Task, TaskKind, WeekdaySetting } from '../types';
+import { NEVER_UPDATED } from '../types';
 import { dayOfWeek, diffDays, eachDate, isValidDateString } from './date';
 
 /** 生成に必要な最小限の入力。プラン保存前のプレビューでも使えるようにしている。 */
@@ -234,6 +235,9 @@ export function generateTasks(plan: Plan, previousTasks: Task[] = []): Task[] {
       isCompleted: entry.kind === 'study' && previous?.isCompleted === true,
       checkedAt: previous?.checkedAt ?? null,
       supersededAt: previous?.supersededAt ?? null,
+      // まだ記録の無いタスクは最古扱いにする。ここでプランの時刻を入れてしまうと、
+      // 他の端末が持っている本物の記録を上書きしてしまう。
+      updatedAt: previous?.updatedAt ?? NEVER_UPDATED,
     };
   });
 

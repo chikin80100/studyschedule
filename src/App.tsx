@@ -1,5 +1,6 @@
 import { HashRouter, NavLink, Route, Routes, useParams } from 'react-router-dom';
 import { useAppData } from './hooks/usePlans';
+import { useSync } from './hooks/useSync';
 import Dashboard from './pages/Dashboard';
 import PlansList from './pages/PlansList';
 import PlanForm from './pages/PlanForm';
@@ -21,6 +22,9 @@ const NAV_ITEMS = [
 
 export default function App() {
   const api = useAppData();
+  // 同期の結果は、いつものデータ更新と同じ経路で反映する。
+  // replaceAll は参照が変わらないので、同期のたびに副作用が張り直されることはない。
+  const sync = useSync(api.data, api.isLoaded, api.replaceAll);
 
   return (
     <HashRouter>
@@ -70,7 +74,7 @@ export default function App() {
                 <Route path="/plans/new" element={<PlanForm api={api} key="new" />} />
                 <Route path="/plans/:planId" element={<PlanDetail api={api} />} />
                 <Route path="/plans/:planId/edit" element={<PlanFormRoute api={api} />} />
-                <Route path="/settings" element={<Settings api={api} />} />
+                <Route path="/settings" element={<Settings api={api} sync={sync} />} />
                 <Route path="*" element={<Dashboard api={api} />} />
               </Routes>
             ) : (

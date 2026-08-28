@@ -1,4 +1,5 @@
 import type { Plan, Task } from '../types';
+import { NEVER_UPDATED } from '../types';
 import { buildSchedule, validateScheduleInput } from './taskGenerator';
 import { addDays, today as todayString } from './date';
 import { roundAmount, sumBy } from './amount';
@@ -27,12 +28,16 @@ export type RescheduleResult = {
  * plannedAmount は書き換えない。書き換えると「計画があったのにできなかった日」が
  * 「もともと予定の無い日」に化けて、連続達成記録の履歴が水増しされてしまう。
  */
-function settlePastTasks(tasks: Task[], asOf: string): Task[] {
-  return tasks.map((task) => ({
-    ...task,
-    checkedAt: task.checkedAt ?? asOf,
-    supersededAt: task.supersededAt ?? asOf,
-  }));
+function settlePastTasks(tasks: Task[], asOf: string, now: string): Task[] {
+  return tasks.map((task) => {
+    if (task.checkedAt !== null && task.supersededAt !== null) return task;
+    return {
+      ...task,
+      checkedAt: task.checkedAt ?? asOf,
+      supersededAt: task.supersededAt ?? asOf,
+      updatedAt: now,
+    };
+  });
 }
 
 function toBufferTasks(tasks: Task[]): Task[] {
@@ -57,6 +62,7 @@ export function rescheduleFrom(
   plan: Plan,
   tasks: Task[],
   fromDate = todayString(),
+  now = new Date().toISOString(),
 ): RescheduleResult {
   const planTasks = tasks.filter((task) => task.planId === plan.id);
 
@@ -68,6 +74,7 @@ export function rescheduleFrom(
   const past = settlePastTasks(
     planTasks.filter((task) => task.date < start),
     fromDate,
+    now,
   );
   const future = planTasks.filter((task) => task.date >= start);
 
@@ -112,6 +119,7 @@ export function rescheduleFrom(
       isCompleted: entry.kind === 'study' && (previous?.doneAmount ?? 0) >= entry.plannedAmount,
       checkedAt: previous?.checkedAt ?? null,
       supersededAt: null,
+      updatedAt: previous?.updatedAt ?? NEVER_UPDATED,
     };
   });
 

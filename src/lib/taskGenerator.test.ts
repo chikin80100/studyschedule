@@ -449,6 +449,7 @@ describe('generateTasks', () => {
     bufferRatio: 0,
     roundingStep: 'auto',
     createdAt: '2026-08-25T00:00:00.000Z',
+    updatedAt: '2026-08-25T00:00:00.000Z',
   };
 
   it('プランに紐づくタスクを日付順で生成する', () => {
@@ -482,6 +483,7 @@ describe('generateTasks', () => {
         isCompleted: true,
         checkedAt: null,
         supersededAt: null,
+        updatedAt: '2026-08-25T00:00:00.000Z',
       },
     ];
     const tasks = generateTasks(plan, foreign);

@@ -37,6 +37,11 @@ export type Task = {
    * plannedAmount はそのまま残すので、連続達成記録の履歴(その日は達成できなかった)は失われない。
    */
   supersededAt: string | null;
+  /**
+   * この日の記録 (doneAmount / isCompleted / checkedAt) を最後に変えた時刻 (ISO 8601)。
+   * 端末間の同期で、どちらの記録を採用するかの判断に使う。
+   */
+  updatedAt: string;
 };
 
 /** 1日あたりの量を切り上げる単位。'auto' なら平均量から自動で選ぶ。 */
@@ -60,16 +65,38 @@ export type Plan = {
   roundingStep: RoundingStep;
   /** ISO 8601 */
   createdAt: string;
+  /**
+   * プランの設定、またはタスクの組み方 (日付・計画量) を最後に変えた時刻 (ISO 8601)。
+   * 同期では「新しいほうのプランが持つタスクの並び」を採用するので、
+   * 再計画のようにタスクだけを組み直す操作でもここを更新する。
+   */
+  updatedAt: string;
+};
+
+/** 削除したプランの記録。同期のときに他の端末から復活しないようにするために残す。 */
+export type PlanDeletion = {
+  planId: string;
+  /** ISO 8601 */
+  deletedAt: string;
 };
 
 /** 保存データ。version は将来のマイグレーション用。 */
-export const CURRENT_DATA_VERSION = 1;
+export const CURRENT_DATA_VERSION = 2;
 
 export type AppData = {
   version: typeof CURRENT_DATA_VERSION;
   plans: Plan[];
   tasks: Task[];
+  /** 削除済みプランの記録 (トゥームストーン)。 */
+  deletions: PlanDeletion[];
 };
+
+/**
+ * 「まだ一度も記録が付いていない」ことを表す時刻。
+ * 生成されたばかりのタスクや、更新時刻を持たない v1 データに使う。
+ * 同期では必ず実際の記録に負けるので、他の端末の記録を消してしまわない。
+ */
+export const NEVER_UPDATED = '1970-01-01T00:00:00.000Z';
 
 export const WEEKDAY_LABELS = ['日', '月', '火', '水', '木', '金', '土'] as const;
 

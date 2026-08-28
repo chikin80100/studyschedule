@@ -1,0 +1,17 @@
+name = "studyschedule-sync"
+main = "src/index.ts"
+compatibility_date = "2026-01-01"
+
+# `npx wrangler d1 create studyschedule` で作ったあと、
+# 表示された database_id をここに貼る。
+[[d1_databases]]
+binding = "DB"
+database_name = "studyschedule"
+# ローカルで試すだけなら、この値はそのままで動きます。
+# Cloudflare に上げるときに、`wrangler d1 create studyschedule` が表示した ID に差し替えてください。
+database_id = "REPLACE_WITH_YOUR_DATABASE_ID"
+
+[vars]
+# アクセスを許可するフロントエンドのオリジン。カンマ区切りで複数指定できる。
+# "*" にすると誰のページからでも呼べてしまうので、公開URLを入れておく。
+ALLOWED_ORIGINS = "https://chikin80100.github.io,http://localhost:5173,http://localhost:4173"

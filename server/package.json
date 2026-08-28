@@ -1,0 +1,18 @@
+{
+  "name": "studyschedule-server",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:local": "wrangler d1 execute studyschedule --local --file=./migrations/0001_init.sql",
+    "db:remote": "wrangler d1 execute studyschedule --remote --file=./migrations/0001_init.sql",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260828.1",
+    "typescript": "^5.9.3",
+    "wrangler": "^4.127.0"
+  }
+}

@@ -15,6 +15,7 @@ const plan: Plan = {
   bufferRatio: 0.15,
   roundingStep: 'auto',
   createdAt: '2026-08-25T00:00:00.000Z',
+  updatedAt: '2026-08-25T00:00:00.000Z',
 };
 
 function dataWith(plans: unknown[], tasks: unknown[] = []) {
@@ -81,6 +82,7 @@ describe('parseAppData', () => {
       isCompleted: false,
       checkedAt: null,
       supersededAt: null,
+      updatedAt: '2026-08-25T00:00:00.000Z',
     };
     expect(parseAppData(dataWith([plan], [orphan])).data.tasks).toHaveLength(0);
   });
@@ -109,6 +111,7 @@ describe('parseAppData', () => {
       isCompleted: true,
       checkedAt: null,
       supersededAt: null,
+      updatedAt: '2026-08-25T00:00:00.000Z',
     };
     const restored = parseAppData(dataWith([plan], [task])).data.tasks[0];
     expect(restored.plannedAmount).toBe(0);
@@ -117,8 +120,68 @@ describe('parseAppData', () => {
   });
 });
 
+describe('v1 データの読み込み (マイグレーション)', () => {
+  it('updatedAt / deletions が無い旧データも読める', () => {
+    const legacyPlan = { ...plan } as Record<string, unknown>;
+    delete legacyPlan.updatedAt;
+    const legacyTasks = generateTasks(plan).map((task) => {
+      const copy = { ...task } as Record<string, unknown>;
+      delete copy.updatedAt;
+      return copy;
+    });
+    const result = parseAppData({ version: 1, plans: [legacyPlan], tasks: legacyTasks });
+
+    expect(result.data.version).toBe(2);
+    expect(result.data.plans).toHaveLength(1);
+    expect(result.data.tasks).toHaveLength(legacyTasks.length);
+    expect(result.data.deletions).toEqual([]);
+    // 旧データは「いちばん古い」として扱い、他端末の記録に負けるようにする。
+    expect(result.data.plans[0].updatedAt).toBe('1970-01-01T00:00:00.000Z');
+    expect(result.data.tasks.every((task) => task.updatedAt === '1970-01-01T00:00:00.000Z')).toBe(
+      true,
+    );
+  });
+
+  it('壊れた updatedAt は最古の時刻に倒す', () => {
+    const result = parseAppData(
+      dataWith([{ ...plan, updatedAt: 'not-a-date' }], []),
+    );
+    expect(result.data.plans[0].updatedAt).toBe('1970-01-01T00:00:00.000Z');
+  });
+
+  it('生きているプランの削除記録は捨てる', () => {
+    const result = parseAppData({
+      version: 2,
+      plans: [plan],
+      tasks: [],
+      deletions: [
+        { planId: plan.id, deletedAt: '2026-09-01T00:00:00.000Z' },
+        { planId: 'gone', deletedAt: '2026-09-01T00:00:00.000Z' },
+      ],
+    });
+    expect(result.data.deletions.map((d) => d.planId)).toEqual(['gone']);
+  });
+
+  it('壊れた削除記録を捨てる', () => {
+    const result = parseAppData({
+      version: 2,
+      plans: [],
+      tasks: [],
+      deletions: [{ planId: '' }, 'x', null, { planId: 'ok' }],
+    });
+    expect(result.data.deletions).toEqual([
+      { planId: 'ok', deletedAt: '1970-01-01T00:00:00.000Z' },
+    ]);
+  });
+});
+
 describe('importFromJson', () => {
-  const data: AppData = { version: 1, plans: [plan], tasks: generateTasks(plan) };
+  const data: AppData = {
+    version: 2,
+    plans: [plan],
+    tasks: generateTasks(plan),
+    deletions: [],
+  };
 
   it('書き出したデータを読み戻せる', () => {
     const restored = importFromJson(exportToJson(data)).data;

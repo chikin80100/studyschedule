@@ -1,5 +1,18 @@
-import type { AppData, DayOfWeek, Plan, RoundingStep, Task, WeekdaySetting } from './types';
-import { CURRENT_DATA_VERSION, DAYS_OF_WEEK, createDefaultWeekdaySettings } from './types';
+import type {
+  AppData,
+  DayOfWeek,
+  Plan,
+  PlanDeletion,
+  RoundingStep,
+  Task,
+  WeekdaySetting,
+} from './types';
+import {
+  CURRENT_DATA_VERSION,
+  DAYS_OF_WEEK,
+  NEVER_UPDATED,
+  createDefaultWeekdaySettings,
+} from './types';
 import { isValidDateString } from './lib/date';
 import { validateScheduleInput } from './lib/taskGenerator';
 import { roundAmount } from './lib/amount';
@@ -7,7 +20,16 @@ import { roundAmount } from './lib/amount';
 const STORAGE_KEY = 'studyschedule.v1';
 
 export function emptyData(): AppData {
-  return { version: CURRENT_DATA_VERSION, plans: [], tasks: [] };
+  return { version: CURRENT_DATA_VERSION, plans: [], tasks: [], deletions: [] };
+}
+
+/** v1 データには updatedAt が無いので、読み込み時にこの時刻を補う。 */
+const LEGACY_TIMESTAMP = NEVER_UPDATED;
+
+function asTimestamp(value: unknown, fallback: string): string {
+  if (typeof value !== 'string') return fallback;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? fallback : date.toISOString();
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -72,6 +94,7 @@ function parsePlan(value: unknown): Plan | null {
     bufferRatio: Math.min(0.5, Math.max(0, asNumber(value.bufferRatio, 0))),
     roundingStep: parseRoundingStep(value.roundingStep),
     createdAt: asString(value.createdAt, new Date().toISOString()),
+    updatedAt: asTimestamp(value.updatedAt, LEGACY_TIMESTAMP),
   };
 
   return validateScheduleInput(plan) === null ? plan : null;
@@ -97,7 +120,15 @@ function parseTask(value: unknown, planIds: Set<string>): Task | null {
     isCompleted: kind === 'study' && value.isCompleted === true,
     checkedAt: isValidDateString(checkedAt) ? checkedAt : null,
     supersededAt: isValidDateString(supersededAt) ? supersededAt : null,
+    updatedAt: asTimestamp(value.updatedAt, LEGACY_TIMESTAMP),
   };
+}
+
+function parseDeletion(value: unknown): PlanDeletion | null {
+  if (!isRecord(value)) return null;
+  const planId = asString(value.planId, '');
+  if (!planId) return null;
+  return { planId, deletedAt: asTimestamp(value.deletedAt, LEGACY_TIMESTAMP) };
 }
 
 export type ParseResult = {
@@ -124,8 +155,13 @@ export function parseAppData(value: unknown): ParseResult {
         .filter((task): task is Task => task !== null)
     : [];
 
+  // 削除記録は、まだ生きているプランの分を捨てる(復活したプランの記録は不要)。
+  const deletions = (Array.isArray(value.deletions) ? value.deletions : [])
+    .map(parseDeletion)
+    .filter((deletion): deletion is PlanDeletion => deletion !== null && !planIds.has(deletion.planId));
+
   return {
-    data: { version: CURRENT_DATA_VERSION, plans, tasks },
+    data: { version: CURRENT_DATA_VERSION, plans, tasks, deletions },
     inputPlanCount: value.plans.length,
     droppedPlanCount: value.plans.length - plans.length,
   };
