@@ -9,7 +9,7 @@ binding = "DB"
 database_name = "studyschedule"
 # ローカルで試すだけなら、この値はそのままで動きます。
 # Cloudflare に上げるときに、`wrangler d1 create studyschedule` が表示した ID に差し替えてください。
-database_id = "REPLACE_WITH_YOUR_DATABASE_ID"
+database_id = "ab6362d6-5800-45bb-8f58-3e272dd965cb"
 
 [vars]
 # アクセスを許可するフロントエンドのオリジン。カンマ区切りで複数指定できる。
