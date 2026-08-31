@@ -164,6 +164,23 @@ npm run deploy
 
 > **すでに一度デプロイしている場合**、通知機能のために `npm run db:remote`(テーブルの追加)と
 > `npm run deploy`(1分ごとの定期実行の登録)をもう一度実行してください。どちらも省くと通知が届きません。
+> `db:remote` はすでにあるテーブルをそのまま残すので、何度実行しても大丈夫です。
+
+### テーブルを作るところで止まったら
+
+`npm run db:remote` がエラーになる場合、まずログインとデータベースの指定を確認してください。
+
+```bash
+npx wrangler whoami          # ログインできているか
+npx wrangler d1 list         # データベースの一覧と ID
+```
+
+`d1 list` に出る `studyschedule` の ID と、`wrangler.toml` の `database_id` が
+一致している必要があります。違っていれば `wrangler.toml` を直してください。
+
+> `A request to the Cloudflare API (/d1/database/.../import) failed` というエラーが出た場合、
+> それは古い手順(SQL ファイルをアップロードする方式)のものです。`git pull` で最新にしてから
+> もう一度実行してください。今の `db:remote` はアップロードを使わず、通常のクエリとして送ります。
 
 `wrangler.toml` の `ALLOWED_ORIGINS` には、アプリを開く URL を入れておいてください
 (既定で GitHub Pages の公開 URL と localhost が入っています)。ここに無いオリジンからは呼べません。
