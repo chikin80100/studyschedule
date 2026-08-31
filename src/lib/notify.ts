@@ -1,6 +1,7 @@
 import type { Plan, Task } from '../types';
 import { computeDayCompletion } from './progress';
 import { formatAmount } from './format';
+import { addDays } from './date';
 
 /**
  * 「勉強開始のお知らせ」まわりの下ごしらえ。
@@ -49,17 +50,44 @@ export function buildReminderText(plans: Plan[], tasks: Task[], date: string): R
   };
 }
 
+/** 日付 → その日の文面。 */
+export type ReminderSchedule = Record<string, ReminderText>;
+
+/** 何日先ぶんの文面を用意しておくか。 */
+export const REMINDER_LOOKAHEAD_DAYS = 21;
+
+/**
+ * 今日から数日ぶんの文面をまとめて作る。
+ *
+ * 通知を出すのは Service Worker で、そのときアプリが開かれているとは限らない。
+ * 今日ぶんだけ置いておくと、しばらくアプリを開かずにいた場合に
+ * 古い日の残量を通知してしまうので、先の日ぶんも用意しておく。
+ */
+export function buildReminderSchedule(
+  plans: Plan[],
+  tasks: Task[],
+  fromDate: string,
+  days: number = REMINDER_LOOKAHEAD_DAYS,
+): ReminderSchedule {
+  const schedule: ReminderSchedule = {};
+  for (let offset = 0; offset < days; offset += 1) {
+    const date = addDays(fromDate, offset);
+    schedule[date] = buildReminderText(plans, tasks, date);
+  }
+  return schedule;
+}
+
 /**
  * 通知の文面を Service Worker から読める場所に置く。
  * localStorage は Service Worker から読めないため Cache API を使う。
  */
-export async function storeReminderText(text: ReminderText): Promise<void> {
+export async function storeReminderSchedule(schedule: ReminderSchedule): Promise<void> {
   if (typeof caches === 'undefined') return;
   try {
     const cache = await caches.open(REMINDER_CACHE);
     await cache.put(
       REMINDER_KEY,
-      new Response(JSON.stringify(text), {
+      new Response(JSON.stringify(schedule), {
         headers: { 'Content-Type': 'application/json' },
       }),
     );

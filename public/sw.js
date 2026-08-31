@@ -10,6 +10,10 @@
  * 中身を暗号化して運ぶ仕組みは複雑なわりに、ここで欲しいのは
  * 「今日やること」の短い文だけなので、その文はアプリ側が Cache API に
  * 書いておき、この Worker が読み出して通知本文にする。
+ *
+ * 置かれているのは「日付 → 文面」の対応表で、数週間先ぶんが入っている。
+ * 通知を出す時点でアプリが開かれているとは限らないため、今日ぶんだけ
+ * 置いておくと、しばらく開かずにいた場合に古い日の残量を出してしまう。
  */
 
 const REMINDER_CACHE = 'studyschedule-reminder';
@@ -17,6 +21,14 @@ const REMINDER_KEY = 'reminder-text';
 
 const DEFAULT_TITLE = '勉強の時間です';
 const DEFAULT_BODY = '今日のタスクを確認しましょう。';
+
+/** 端末の暦での今日を 'YYYY-MM-DD' で返す。 */
+function localToday() {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${now.getFullYear()}-${month}-${day}`;
+}
 
 self.addEventListener('install', () => {
   // 新しい Service Worker をすぐ有効にする。
@@ -28,17 +40,22 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(self.clients.claim());
 });
 
-/** アプリが書き込んだ「今日やること」を読む。無ければ既定の文言。 */
+/**
+ * アプリが書き込んだ対応表から「今日やること」を読む。
+ * 表が無い / 今日ぶんが入っていない (長く開いていない) 場合は既定の文言にする。
+ * 古い日の残量をそのまま出すと、事実と違う数を知らせてしまうため。
+ */
 async function readReminderText() {
   try {
     const cache = await caches.open(REMINDER_CACHE);
     const stored = await cache.match(REMINDER_KEY);
     if (!stored) return { title: DEFAULT_TITLE, body: DEFAULT_BODY };
 
-    const value = await stored.json();
+    const schedule = await stored.json();
+    const value = schedule?.[localToday()];
     return {
-      title: typeof value.title === 'string' && value.title !== '' ? value.title : DEFAULT_TITLE,
-      body: typeof value.body === 'string' && value.body !== '' ? value.body : DEFAULT_BODY,
+      title: typeof value?.title === 'string' && value.title !== '' ? value.title : DEFAULT_TITLE,
+      body: typeof value?.body === 'string' && value.body !== '' ? value.body : DEFAULT_BODY,
     };
   } catch {
     return { title: DEFAULT_TITLE, body: DEFAULT_BODY };

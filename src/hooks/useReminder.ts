@@ -3,13 +3,13 @@ import type { AppData } from '../types';
 import type { SyncSettings } from '../lib/sync';
 import { isSyncConfigured } from '../lib/sync';
 import {
-  buildReminderText,
+  buildReminderSchedule,
   checkPushSupport,
   currentTimeZone,
   decodeVapidKey,
   isStandalone,
   registerServiceWorker,
-  storeReminderText,
+  storeReminderSchedule,
 } from '../lib/notify';
 import { today as todayString } from '../lib/date';
 
@@ -125,9 +125,10 @@ export function useReminder(sync: SyncSettings, data: AppData): ReminderApi {
     void registerServiceWorker();
   }, []);
 
-  // 通知の文面は「今日の残り」なので、データが変わるたびに置き直す。
+  // 通知の文面はその日の残りなので、データが変わるたびに置き直す。
+  // 通知の時点でアプリが開かれているとは限らないため、先の日ぶんも用意する。
   useEffect(() => {
-    void storeReminderText(buildReminderText(data.plans, data.tasks, todayString()));
+    void storeReminderSchedule(buildReminderSchedule(data.plans, data.tasks, todayString()));
   }, [data]);
 
   const state: ReminderState = !support.supported

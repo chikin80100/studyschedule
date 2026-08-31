@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { buildReminderText, decodeVapidKey } from './notify';
+import {
+  REMINDER_LOOKAHEAD_DAYS,
+  buildReminderSchedule,
+  buildReminderText,
+  decodeVapidKey,
+} from './notify';
 import { generateTasks } from './taskGenerator';
 import { createDefaultWeekdaySettings } from '../types';
 import type { Plan, Task } from '../types';
@@ -93,6 +98,66 @@ describe('buildReminderText', () => {
     const plan = makePlan();
     const text = buildReminderText([], generateTasks(plan), '2026-09-01');
     expect(text.title).toBeTruthy();
+  });
+});
+
+describe('buildReminderSchedule', () => {
+  it('今日から数週間ぶんの文面を作る', () => {
+    const plan = makePlan();
+    const schedule = buildReminderSchedule([plan], generateTasks(plan), '2026-09-01');
+    expect(Object.keys(schedule)).toHaveLength(REMINDER_LOOKAHEAD_DAYS);
+    expect(schedule['2026-09-01']).toBeDefined();
+  });
+
+  it('日ごとにその日の残りを入れる', () => {
+    const plan = makePlan();
+    const schedule = buildReminderSchedule([plan], generateTasks(plan), '2026-09-01');
+    expect(schedule['2026-09-01'].body).toBe('英単語 10語');
+    expect(schedule['2026-09-02'].body).toBe('英単語 10語');
+  });
+
+  it('計画の外の日は予定なしにする', () => {
+    const plan = makePlan();
+    const schedule = buildReminderSchedule([plan], generateTasks(plan), '2026-09-01');
+    // 計画は 09-05 まで。その先は予定が無い。
+    expect(schedule['2026-09-10'].body).toContain('予定がありません');
+  });
+
+  it('終えた日はねぎらいの文面になる', () => {
+    const plan = makePlan();
+    const tasks = complete(generateTasks(plan), '2026-09-01');
+    const schedule = buildReminderSchedule([plan], tasks, '2026-09-01');
+    expect(schedule['2026-09-01'].title).toBe('お疲れさまでした');
+    expect(schedule['2026-09-02'].title).toBe('勉強の時間です');
+  });
+
+  it('月をまたいでも日付が飛ばない', () => {
+    const plan = makePlan({ startDate: '2026-02-25', endDate: '2026-03-05', totalAmount: 90 });
+    const schedule = buildReminderSchedule([plan], generateTasks(plan), '2026-02-25', 5);
+    expect(Object.keys(schedule).sort()).toEqual([
+      '2026-02-25',
+      '2026-02-26',
+      '2026-02-27',
+      '2026-02-28',
+      '2026-03-01',
+    ]);
+  });
+
+  it('プランが無くても各日ぶん作る', () => {
+    const schedule = buildReminderSchedule([], [], '2026-09-01', 3);
+    expect(Object.keys(schedule)).toHaveLength(3);
+    for (const text of Object.values(schedule)) {
+      expect(text.title).toBeTruthy();
+      expect(text.body).toBeTruthy();
+    }
+  });
+
+  it('どの日も本文が空にならない', () => {
+    const plan = makePlan();
+    const schedule = buildReminderSchedule([plan], generateTasks(plan), '2026-09-01');
+    for (const text of Object.values(schedule)) {
+      expect(text.body.length).toBeGreaterThan(0);
+    }
   });
 });
 
