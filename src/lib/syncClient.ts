@@ -1,6 +1,6 @@
 import type { AppData } from '../types';
 import { parseAppData } from '../storage';
-import { mergeAppData } from './sync';
+import { SYNC_API_BASE, mergeAppData } from './sync';
 import type { SyncSettings } from './sync';
 
 export type RemoteSnapshot = {
@@ -16,8 +16,8 @@ export class SyncError extends Error {
   }
 }
 
-function endpoint(apiBase: string, path = '/api/space'): string {
-  return `${apiBase.replace(/\/+$/, '')}${path}`;
+function endpoint(path = '/api/space'): string {
+  return `${SYNC_API_BASE}${path}`;
 }
 
 async function readError(response: Response, fallback: string): Promise<string> {
@@ -33,8 +33,8 @@ async function readError(response: Response, fallback: string): Promise<string> 
 }
 
 /** 新しい同期コードを発行する。返ってきたコードは他の端末で入力してもらう。 */
-export async function createSyncCode(apiBase: string, signal?: AbortSignal): Promise<string> {
-  const response = await fetch(endpoint(apiBase), { method: 'POST', signal });
+export async function createSyncCode(signal?: AbortSignal): Promise<string> {
+  const response = await fetch(endpoint(), { method: 'POST', signal });
   if (!response.ok) {
     throw new SyncError(await readError(response, '同期コードを発行できませんでした。'));
   }
@@ -51,7 +51,7 @@ export async function fetchRemote(
   settings: SyncSettings,
   signal?: AbortSignal,
 ): Promise<RemoteSnapshot> {
-  const response = await fetch(endpoint(settings.apiBase), {
+  const response = await fetch(endpoint(), {
     headers: { Authorization: `Bearer ${settings.code}` },
     signal,
   });
@@ -104,7 +104,7 @@ export async function syncNow(
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     const merged = mergeAppData(local, remote.data);
-    const response = await fetch(endpoint(settings.apiBase), {
+    const response = await fetch(endpoint(), {
       method: 'PUT',
       headers: {
         Authorization: `Bearer ${settings.code}`,

@@ -25,35 +25,24 @@ function formatSyncedAt(value: string | null): string {
 }
 
 export default function SyncSection({ sync }: { sync: SyncApi }) {
-  const [apiBase, setApiBase] = useState(sync.settings.apiBase);
   const [code, setCode] = useState(sync.settings.code);
   const [isCreating, setIsCreating] = useState(false);
   const [notice, setNotice] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
 
-  useEffect(() => setApiBase(sync.settings.apiBase), [sync.settings.apiBase]);
   useEffect(() => setCode(sync.settings.code), [sync.settings.code]);
 
-  const trimmedBase = apiBase.trim().replace(/\/+$/, '');
   const trimmedCode = code.trim();
 
   const handleConnect = () => {
-    if (trimmedBase === '') {
-      setNotice({ tone: 'error', text: '同期サーバーの URL を入力してください。' });
-      return;
-    }
     if (trimmedCode === '') {
       setNotice({ tone: 'error', text: '同期コードを入力してください。' });
       return;
     }
-    sync.updateSettings({ apiBase: trimmedBase, code: trimmedCode, lastSyncedAt: null });
+    sync.updateSettings({ code: trimmedCode, lastSyncedAt: null });
     setNotice({ tone: 'ok', text: '設定を保存しました。まもなく同期されます。' });
   };
 
   const handleCreate = async () => {
-    if (trimmedBase === '') {
-      setNotice({ tone: 'error', text: '先に同期サーバーの URL を入力してください。' });
-      return;
-    }
     if (
       sync.isConfigured &&
       !window.confirm(
@@ -65,9 +54,9 @@ export default function SyncSection({ sync }: { sync: SyncApi }) {
     setIsCreating(true);
     setNotice(null);
     try {
-      const issued = await createSyncCode(trimmedBase);
+      const issued = await createSyncCode();
       setCode(issued);
-      sync.updateSettings({ apiBase: trimmedBase, code: issued, lastSyncedAt: null });
+      sync.updateSettings({ code: issued, lastSyncedAt: null });
       setNotice({
         tone: 'ok',
         text: 'コードを発行しました。他の端末でもこのコードを入力してください。',
@@ -78,7 +67,7 @@ export default function SyncSection({ sync }: { sync: SyncApi }) {
         text:
           cause instanceof SyncError
             ? cause.message
-            : 'サーバーに接続できませんでした。URL を確認してください。',
+            : 'サーバーに接続できませんでした。通信環境を確認してください。',
       });
     } finally {
       setIsCreating(false);
@@ -120,6 +109,10 @@ export default function SyncSection({ sync }: { sync: SyncApi }) {
           同期コードを共有した端末どうしで、プランと記録を1つにまとめます。
           オフラインでもこれまで通り使えて、つながったときに自動で反映されます。
         </p>
+        <p className="mt-1 text-xs text-slate-400">
+          はじめて使うときは <strong className="font-semibold text-slate-500">新しいコードを発行</strong>{' '}
+          を押してください。すでに他の端末で使っている場合は、そのコードを入力します。
+        </p>
       </div>
 
       {notice && (
@@ -141,22 +134,6 @@ export default function SyncSection({ sync }: { sync: SyncApi }) {
       )}
 
       <label className="block">
-        <span className="text-sm font-medium text-slate-700">同期サーバーの URL</span>
-        <input
-          type="url"
-          inputMode="url"
-          autoComplete="off"
-          value={apiBase}
-          onChange={(event) => setApiBase(event.target.value)}
-          placeholder="https://studyschedule-sync.example.workers.dev"
-          className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
-        />
-        <span className="mt-1 block text-xs text-slate-500">
-          自分でデプロイした Worker の URL です。README の手順で用意できます。
-        </span>
-      </label>
-
-      <label className="block">
         <span className="text-sm font-medium text-slate-700">同期コード</span>
         <input
           type="text"
@@ -176,7 +153,7 @@ export default function SyncSection({ sync }: { sync: SyncApi }) {
           onClick={handleConnect}
           className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700"
         >
-          この設定で同期する
+          このコードで同期する
         </button>
         <button
           type="button"

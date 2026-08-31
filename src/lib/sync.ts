@@ -174,10 +174,20 @@ function byPlanThenDate(a: Task, b: Task): number {
   return a.planId.localeCompare(b.planId) || a.date.localeCompare(b.date);
 }
 
+/**
+ * 同期と通知を担うサーバーの URL。
+ *
+ * 利用者に入力してもらうものではないので、ここで固定する。
+ * 手元の Worker に向けて試したいときだけ、ビルド時に
+ * VITE_SYNC_API_BASE で差し替える (例: .env.local に
+ * VITE_SYNC_API_BASE=http://localhost:8787 と書く)。
+ */
+export const SYNC_API_BASE: string = (
+  import.meta.env.VITE_SYNC_API_BASE ?? 'https://studyschedule-sync.chikin80100.workers.dev'
+).replace(/\/+$/, '');
+
 /** 同期状態の保存先。データ本体とは別のキーに置く。 */
 export type SyncSettings = {
-  /** 同期サーバーの URL (末尾スラッシュなし)。未設定なら同期しない。 */
-  apiBase: string;
   /** 同期コード。これを知っている端末どうしがデータを共有する。 */
   code: string;
   /** 最後にサーバーと同期できた時刻 (ISO 8601)。一度もしていなければ null。 */
@@ -187,7 +197,7 @@ export type SyncSettings = {
 const SYNC_KEY = 'studyschedule.sync';
 
 export function emptySyncSettings(): SyncSettings {
-  return { apiBase: '', code: '', lastSyncedAt: null };
+  return { code: '', lastSyncedAt: null };
 }
 
 export function loadSyncSettings(): SyncSettings {
@@ -197,8 +207,8 @@ export function loadSyncSettings(): SyncSettings {
     const parsed: unknown = JSON.parse(raw);
     if (typeof parsed !== 'object' || parsed === null) return emptySyncSettings();
     const value = parsed as Record<string, unknown>;
+    // 以前は URL も保存していた。今は固定なので読み捨てる。
     return {
-      apiBase: typeof value.apiBase === 'string' ? value.apiBase.replace(/\/+$/, '') : '',
       code: typeof value.code === 'string' ? value.code : '',
       lastSyncedAt: typeof value.lastSyncedAt === 'string' ? value.lastSyncedAt : null,
     };
@@ -215,7 +225,7 @@ export function saveSyncSettings(settings: SyncSettings): void {
   }
 }
 
-/** 同期の準備ができているか (サーバーURLと同期コードの両方がある)。 */
+/** 同期の準備ができているか (同期コードが入っているか)。 */
 export function isSyncConfigured(settings: SyncSettings): boolean {
-  return settings.apiBase !== '' && settings.code !== '';
+  return settings.code !== '';
 }

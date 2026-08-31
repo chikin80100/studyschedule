@@ -56,7 +56,7 @@ export default function ReminderSection({ reminder }: { reminder: ReminderApi })
 
       {state.kind === 'needs-sync' && (
         <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-900">
-          通知はサーバーから送るため、先に上の「端末間で同期」を設定してください。
+          通知はサーバーから送るため、先に上の「端末間で同期」で同期コードを用意してください。
         </p>
       )}
 

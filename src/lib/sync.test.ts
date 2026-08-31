@@ -1,5 +1,12 @@
-import { describe, expect, it } from 'vitest';
-import { isSameAppData, mergeAppData, stableStringify } from './sync';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  SYNC_API_BASE,
+  isSameAppData,
+  isSyncConfigured,
+  loadSyncSettings,
+  mergeAppData,
+  stableStringify,
+} from './sync';
 import { parseAppData } from '../storage';
 import { generateTasks } from './taskGenerator';
 import { createDefaultWeekdaySettings } from '../types';
@@ -297,5 +304,65 @@ describe('mergeAppData: 性質', () => {
     const merged = mergeAppData(a, b);
     const dates = merged.tasks.map((task) => task.date);
     expect(dates).toEqual([...dates].sort());
+  });
+});
+
+/** localStorage の代わり。テスト環境には無いので用意する。 */
+function stubStorage(stored: string | null): void {
+  vi.stubGlobal('localStorage', {
+    getItem: () => stored,
+    setItem: () => {},
+    removeItem: () => {},
+  });
+}
+
+afterEach(() => vi.unstubAllGlobals());
+
+describe('同期サーバーの URL', () => {
+  it('固定されていて、末尾にスラッシュが付かない', () => {
+    expect(SYNC_API_BASE).toMatch(/^https?:\/\//);
+    expect(SYNC_API_BASE).not.toMatch(/\/$/);
+  });
+});
+
+describe('同期設定の読み込み', () => {
+  it('保存されたコードを読む', () => {
+    stubStorage(JSON.stringify({ code: 'ABC-123', lastSyncedAt: '2026-09-01T00:00:00.000Z' }));
+    expect(loadSyncSettings()).toEqual({
+      code: 'ABC-123',
+      lastSyncedAt: '2026-09-01T00:00:00.000Z',
+    });
+  });
+
+  it('以前保存された URL は読み捨てる', () => {
+    stubStorage(JSON.stringify({ apiBase: 'https://old.example.com', code: 'ABC-123' }));
+    const settings = loadSyncSettings();
+    expect(settings.code).toBe('ABC-123');
+    expect(settings).not.toHaveProperty('apiBase');
+  });
+
+  it('何も保存されていなければ空で始める', () => {
+    stubStorage(null);
+    expect(loadSyncSettings()).toEqual({ code: '', lastSyncedAt: null });
+  });
+
+  it('壊れた値でも落ちない', () => {
+    stubStorage('{ですけど');
+    expect(loadSyncSettings()).toEqual({ code: '', lastSyncedAt: null });
+  });
+
+  it('型が違う値は既定に落とす', () => {
+    stubStorage(JSON.stringify({ code: 42, lastSyncedAt: [] }));
+    expect(loadSyncSettings()).toEqual({ code: '', lastSyncedAt: null });
+  });
+});
+
+describe('同期の準備ができているか', () => {
+  it('コードがあれば準備できている', () => {
+    expect(isSyncConfigured({ code: 'ABC-123', lastSyncedAt: null })).toBe(true);
+  });
+
+  it('コードが無ければ同期しない', () => {
+    expect(isSyncConfigured({ code: '', lastSyncedAt: null })).toBe(false);
   });
 });

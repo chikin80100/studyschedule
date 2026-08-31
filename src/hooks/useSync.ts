@@ -57,7 +57,7 @@ export function useSync(
 
   const isConfigured = isSyncConfigured(settings);
   // 接続先が変わったら (コードを入れ直した / 発行し直した) すぐ同期し直す。
-  const syncTarget = `${settings.apiBase}\u0000${settings.code}`;
+  const syncTarget = settings.code;
 
   const writeSettings = useCallback((changes: Partial<SyncSettings>) => {
     const next = { ...settingsRef.current, ...changes };

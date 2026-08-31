@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AppData } from '../types';
 import type { SyncSettings } from '../lib/sync';
-import { isSyncConfigured } from '../lib/sync';
+import { SYNC_API_BASE, isSyncConfigured } from '../lib/sync';
 import {
   buildReminderSchedule,
   checkPushSupport,
@@ -145,7 +145,7 @@ export function useReminder(sync: SyncSettings, data: AppData): ReminderApi {
   const registerOnServer = useCallback(
     async (next: ReminderSettings, subscription: PushSubscription) => {
       const current = syncRef.current;
-      const response = await fetch(`${current.apiBase}/api/push`, {
+      const response = await fetch(`${SYNC_API_BASE}/api/push`, {
         method: 'PUT',
         headers: {
           Authorization: `Bearer ${current.code}`,
@@ -176,8 +176,7 @@ export function useReminder(sync: SyncSettings, data: AppData): ReminderApi {
     const existing = await registration.pushManager.getSubscription();
     if (existing !== null) return existing;
 
-    const current = syncRef.current;
-    const keyResponse = await fetch(`${current.apiBase}/api/push/key`);
+    const keyResponse = await fetch(`${SYNC_API_BASE}/api/push/key`);
     if (!keyResponse.ok) throw new Error('サーバーから通知用の鍵を取得できませんでした。');
     const { publicKey } = (await keyResponse.json()) as { publicKey: string };
 
@@ -253,7 +252,7 @@ export function useReminder(sync: SyncSettings, data: AppData): ReminderApi {
       const subscription = await registration?.pushManager.getSubscription();
       if (subscription) {
         const current = syncRef.current;
-        await fetch(`${current.apiBase}/api/push`, {
+        await fetch(`${SYNC_API_BASE}/api/push`, {
           method: 'DELETE',
           headers: {
             Authorization: `Bearer ${current.code}`,
@@ -276,7 +275,7 @@ export function useReminder(sync: SyncSettings, data: AppData): ReminderApi {
     try {
       const subscription = await ensureSubscription();
       const current = syncRef.current;
-      const response = await fetch(`${current.apiBase}/api/push/test`, {
+      const response = await fetch(`${SYNC_API_BASE}/api/push/test`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${current.code}`,
