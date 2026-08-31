@@ -6,13 +6,15 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "db:local": "wrangler d1 execute studyschedule --local --file=./migrations/0001_init.sql",
-    "db:remote": "wrangler d1 execute studyschedule --remote --file=./migrations/0001_init.sql",
-    "typecheck": "tsc --noEmit"
+    "db:local": "wrangler d1 execute studyschedule --local --file=./migrations/0001_init.sql && wrangler d1 execute studyschedule --local --file=./migrations/0002_reminders.sql",
+    "db:remote": "wrangler d1 execute studyschedule --remote --file=./migrations/0001_init.sql && wrangler d1 execute studyschedule --remote --file=./migrations/0002_reminders.sql",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260828.1",
     "typescript": "^5.9.3",
-    "wrangler": "^4.127.0"
+    "wrangler": "^4.127.0",
+    "vitest": "^4.1.11"
   }
 }

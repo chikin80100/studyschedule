@@ -11,7 +11,14 @@ database_name = "studyschedule"
 # Cloudflare に上げるときに、`wrangler d1 create studyschedule` が表示した ID に差し替えてください。
 database_id = "ab6362d6-5800-45bb-8f58-3e272dd965cb"
 
+# 「勉強開始のお知らせ」を送るための定時実行。
+# 毎分動いて、その時刻を迎えた購読だけに送る。
+[triggers]
+crons = ["* * * * *"]
+
 [vars]
 # アクセスを許可するフロントエンドのオリジン。カンマ区切りで複数指定できる。
 # "*" にすると誰のページからでも呼べてしまうので、公開URLを入れておく。
 ALLOWED_ORIGINS = "https://chikin80100.github.io,http://localhost:5173,http://localhost:4173"
+# 通知サービスが問題を見つけたときの連絡先。自分のメールアドレスに変えてもよい。
+VAPID_SUBJECT = "mailto:studyschedule@example.invalid"

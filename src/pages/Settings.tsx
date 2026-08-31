@@ -1,10 +1,20 @@
 import { useRef, useState } from 'react';
 import type { AppDataApi } from '../hooks/usePlans';
 import type { SyncApi } from '../hooks/useSync';
+import type { ReminderApi } from '../hooks/useReminder';
 import { emptyData, exportToJson, importFromJson } from '../storage';
 import SyncSection from '../components/SyncSection';
+import ReminderSection from '../components/ReminderSection';
 
-export default function Settings({ api, sync }: { api: AppDataApi; sync: SyncApi }) {
+export default function Settings({
+  api,
+  sync,
+  reminder,
+}: {
+  api: AppDataApi;
+  sync: SyncApi;
+  reminder: ReminderApi;
+}) {
   const fileInput = useRef<HTMLInputElement>(null);
   const [message, setMessage] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
 
@@ -77,6 +87,8 @@ export default function Settings({ api, sync }: { api: AppDataApi; sync: SyncApi
       )}
 
       <SyncSection sync={sync} />
+
+      <ReminderSection reminder={reminder} />
 
       <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
         <div>

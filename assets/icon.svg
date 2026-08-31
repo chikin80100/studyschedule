@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#6366f1"/>
+      <stop offset="1" stop-color="#4338ca"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 背景 -->
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+
+  <!-- カレンダー本体 -->
+  <rect x="106" y="128" width="300" height="272" rx="34" fill="#ffffff"/>
+  <!-- 見出し帯 -->
+  <path d="M106 162a34 34 0 0 1 34-34h232a34 34 0 0 1 34 34v34H106z" fill="#c7d2fe"/>
+  <!-- リング -->
+  <rect x="168" y="96" width="26" height="66" rx="13" fill="#312e81"/>
+  <rect x="318" y="96" width="26" height="66" rx="13" fill="#312e81"/>
+
+  <!-- 日付のドット (積み上がる日々) -->
+  <g fill="#c7d2fe">
+    <circle cx="162" cy="248" r="17"/>
+    <circle cx="226" cy="248" r="17"/>
+    <circle cx="162" cy="318" r="17"/>
+  </g>
+
+  <!-- 達成のチェック -->
+  <path d="M214 318 L258 362 L366 244"
+        fill="none" stroke="#10b981" stroke-width="42"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
